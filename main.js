@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const { fileURLToPath } = require("url");
-const { app, BrowserWindow, globalShortcut, session, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, session, ipcMain, Tray, Menu, nativeImage } = require("electron");
 
 // ── Resolve a stable .env location ──
 // In packaged builds process.cwd() is unstable and frequently read-only
@@ -113,8 +113,8 @@ class ApplicationController {
     this.isReady = false;
     this.starting = false;
     this.activeSkill = "dsa";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+    // Default to C++ so language is enforced from first run
+    this.codingLanguage = "cpp";
     this.speechAvailable = false;
 
     // Utterance coalescing: VAD emits a transcript per natural pause, but a
@@ -261,6 +261,7 @@ class ApplicationController {
 
       await windowManager.initializeWindows({ showMainWindow: !isFirstRun });
       this.setupGlobalShortcuts();
+      this.setupSystemTray(); // Windows tray icon for fullscreen recovery
 
       // Initialize default stealth mode with terminal icon
       this.updateAppIcon("terminal");
@@ -308,7 +309,7 @@ class ApplicationController {
   setupNetworkConfiguration() {
     // Configure session to handle network requests better
     const ses = session.defaultSession;
-    
+
     // Allow HTTPS requests to Google APIs
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
       if (details.url.includes('generativelanguage.googleapis.com')) {
@@ -319,7 +320,7 @@ class ApplicationController {
       }
       callback({ requestHeaders: details.requestHeaders });
     });
-    
+
     // Handle certificate errors for Google APIs
     ses.setCertificateVerifyProc((request, callback) => {
       if (request.hostname === 'generativelanguage.googleapis.com') {
@@ -328,7 +329,7 @@ class ApplicationController {
         callback(-2); // Use default verification
       }
     });
-    
+
     logger.debug('Network configuration applied for Gemini API');
   }
 
@@ -403,6 +404,16 @@ class ApplicationController {
         const results = windowManager.testAlwaysOnTopForAllWindows();
         logger.info('Always-on-top test triggered via shortcut', results);
       },
+      // ── Fullscreen recovery shortcut ──────────────────────────────────────
+      // Use Ctrl+Shift+F (or Cmd+Shift+F on Mac) to immediately resurface
+      // all overlay windows above exclusive fullscreen apps like HackerEarth,
+      // Unstop Smart Hire, browser F11, Zoom, etc.
+      // If windows are currently hidden, this shows them AND forces them on top.
+      "CommandOrControl+Shift+F": () => {
+        logger.info('Fullscreen recovery shortcut triggered');
+        windowManager.showAllWindows();
+        windowManager.forceAlwaysOnTopForAllWindows();
+      },
       // Context-sensitive shortcuts based on interaction mode
       "CommandOrControl+Up": () => this.handleUpArrow(),
       "CommandOrControl+Down": () => this.handleDownArrow(),
@@ -414,6 +425,59 @@ class ApplicationController {
       const success = globalShortcut.register(accelerator, handler);
       logger.debug("Global shortcut registered", { accelerator, success });
     });
+  }
+
+  // ── System Tray Icon ────────────────────────────────────────────────────
+  // Provides a last-resort recovery mechanism: clicking the tray icon forces
+  // all overlay windows back to the top, even over exclusive fullscreen apps
+  // (HackerEarth, Unstop Smart Hire, browser F11, Zoom, etc.).
+  // The tray is only created on Windows; macOS has its own menu bar approach.
+  setupSystemTray() {
+    if (process.platform !== 'win32') return;
+    try {
+      const iconPath = path.join(__dirname, 'assests', 'icons', 'terminal.png');
+      let trayIcon;
+      try {
+        trayIcon = nativeImage.createFromPath(iconPath);
+        // Scale icon to standard tray size (16x16 on Windows)
+        trayIcon = trayIcon.resize({ width: 16, height: 16 });
+      } catch (_) {
+        trayIcon = nativeImage.createEmpty();
+      }
+
+      this._tray = new Tray(trayIcon);
+      this._tray.setToolTip('OpenCluely – Click to restore overlay (Ctrl+Shift+F)');
+
+      const recover = () => {
+        logger.info('System tray clicked: restoring overlay above fullscreen');
+        windowManager.showAllWindows();
+        windowManager.forceAlwaysOnTopForAllWindows();
+      };
+
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: '🔝 Restore overlay (above fullscreen)',
+          click: recover,
+        },
+        {
+          label: '👁  Toggle visibility',
+          click: () => windowManager.toggleVisibility(),
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit OpenCluely',
+          click: () => app.quit(),
+        },
+      ]);
+
+      this._tray.setContextMenu(contextMenu);
+      // Single left-click also triggers recovery (most users won't right-click)
+      this._tray.on('click', recover);
+
+      logger.info('System tray icon created (Windows fullscreen recovery)');
+    } catch (err) {
+      logger.warn('Could not create system tray icon', { error: err.message });
+    }
   }
 
   setupServiceEventHandlers() {
@@ -456,10 +520,10 @@ class ApplicationController {
   }
 
   setupIPCHandlers() {
-  ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
-  ipcMain.handle("list-displays", () => captureService.listDisplays());
-  ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
-    
+    ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+    ipcMain.handle("list-displays", () => captureService.listDisplays());
+    ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
+
     // Provide reliable clipboard write via main process
     ipcMain.handle("copy-to-clipboard", (event, text) => {
       try {
@@ -471,7 +535,7 @@ class ApplicationController {
         return false;
       }
     });
-    
+
     ipcMain.handle("get-speech-availability", () => {
       return speechService.isAvailable ? speechService.isAvailable() : false;
     });
@@ -695,7 +759,7 @@ class ApplicationController {
       try {
         const connectivity = await llmService.checkNetworkConnectivity();
         const apiTest = await llmService.testConnection();
-        
+
         return {
           success: true,
           connectivity,
@@ -951,7 +1015,7 @@ class ApplicationController {
       try {
         windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
         windowManager.broadcastToAllWindows("speech-availability", { available: false });
-      } catch (e) {}
+      } catch (e) { }
       return;
     }
     const currentStatus = speechService.getStatus();
@@ -1076,7 +1140,7 @@ class ApplicationController {
     try {
       windowManager.showLLMLoading();
 
-  const capture = await captureService.captureAndProcess();
+      const capture = await captureService.captureAndProcess();
 
       if (!capture.imageBuffer || !capture.imageBuffer.length) {
         windowManager.hideLLMResponse();
@@ -1135,7 +1199,7 @@ class ApplicationController {
 
       windowManager.hideLLMResponse();
       this.broadcastOCRError(error.message);
-      
+
       sessionManager.addConversationEvent({
         role: 'system',
         content: `Screenshot OCR failed: ${error.message}`,
@@ -1414,7 +1478,7 @@ class ApplicationController {
           skill: this.activeSkill,
           fallbackResponse: fallbackResult.response
         });
-        
+
       } catch (fallbackError) {
         logger.error("Fallback response also failed", {
           fallbackError: fallbackError.message
