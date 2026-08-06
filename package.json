@@ -20,13 +20,13 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "author": {
-    "name": "TechyCSR",
-    "email": "info@techycsr.dev",
-    "url": "https://techycsr.dev"
+    "name": "Darshangowdac2005",
+    "email": "darshangowdac2005@gmail.com",
+    "url": "https://github.com/Darshangowdac2005"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TechyCSR/OpenCluely"
+    "url": "https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant"
   },
   "license": "ISC",
   "dependencies": {
