@@ -33,6 +33,7 @@ It is free and open source. Processing stays on your machine, and the only thing
 ## Highlights
 
 - **Invisible overlay.** Windows stay out of Zoom, Google Meet, Microsoft Teams, Discord, and OBS captures. You see the answer, the call does not.
+- **Survives exclusive fullscreen.** Works seamlessly above fullscreen assessment platforms (HackerEarth, Unstop Smart Hire) without stealing focus.
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
 - **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
@@ -146,6 +147,7 @@ For Azure Speech, create a Speech resource in the [Azure Portal](https://portal.
 
 | Action | Shortcut | Description |
 |---|---|---|
+| Fullscreen Recovery | `Cmd/Ctrl + Shift + F` | Immediately force the overlay above any exclusive fullscreen app |
 | Screenshot capture | `Cmd/Ctrl + Shift + S` | Capture the screen and analyze it with Gemini |
 | Toggle speech | `Alt + R` | Start or stop voice recognition, if configured |
 | Toggle visibility | `Cmd/Ctrl + Shift + V` | Show or hide all windows |
@@ -196,6 +198,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 <details>
 <summary>App issues</summary>
 
+- **Overlay disappeared in a fullscreen assessment (Windows).** Press `Ctrl + Shift + F`, or click the OpenCluely icon in your system tray to instantly force the overlay back to the top without exiting fullscreen.
 - **Electron will not start or shows a blank window on Linux.** Try `npm run dev`, and make sure X11 or XWayland is available in headless setups.
 - **macOS screen capture does not work.** Grant Screen Recording permission under System Settings, Privacy and Security, then relaunch the app.
 - **Windows SmartScreen blocks the app.** Click More info, then Run anyway, or use `npm start` during development.
