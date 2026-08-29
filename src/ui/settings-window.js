@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {    
+document.addEventListener('DOMContentLoaded', () => {
     const logger = {
         info: (...args) => console.log('[SettingsWindowUI]', ...args)
     };
@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
     const iconGrid = document.getElementById('iconGrid');
+    const opacityRange = document.getElementById('opacityRange');
+    const opacityValueLabel = document.getElementById('opacityValue');
 
     // Check if window.api exists
     if (!window.api) {
@@ -54,17 +56,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.api && window.api.send) {
                     window.api.send('quit-app');
                 }
-                
+
                 // Also try the electron API if available
                 if (window.electronAPI && window.electronAPI.quit) {
                     window.electronAPI.quit();
                 }
-                
+
                 // Fallback: close the window
                 setTimeout(() => {
                     window.close();
                 }, 500);
-                
+
             } catch (error) {
                 console.error('Error quitting app:', error);
                 window.close();
@@ -97,6 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
 
+        // Load window opacity
+        if (opacityRange && opacityValueLabel) {
+            const opacityPct = Math.round((settings.windowOpacity || 1.0) * 100);
+            opacityRange.value = opacityPct;
+            opacityValueLabel.textContent = opacityPct + '%';
+        }
+
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
         if (selectedIcon && iconGrid) {
@@ -124,13 +133,13 @@ document.addEventListener('DOMContentLoaded', () => {
             requestCurrentSettings();
         });
 
-    // Listen for coding language changes from other windows via helper
-    window.electronAPI.onCodingLanguageChanged((event, data) => {
+        // Listen for coding language changes from other windows via helper
+        window.electronAPI.onCodingLanguageChanged((event, data) => {
             if (data && data.language && codingLanguageSelect) {
                 codingLanguageSelect.value = data.language;
                 console.log('Language updated from overlay window:', data.language);
             }
-    });
+        });
     }
 
     // Save settings helper function
@@ -150,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
-        
+
         window.api.send('save-settings', settings);
     };
 
@@ -180,8 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperDeviceSelect,
             whisperCaptureModeSelect, whisperResponseTargetSelect, whisperSegmentMsInput].forEach(input => {
-            if (input) input.disabled = provider !== 'whisper';
-        });
+                if (input) input.disabled = provider !== 'whisper';
+            });
     };
 
     // Add event listeners for all inputs
@@ -233,6 +242,25 @@ document.addEventListener('DOMContentLoaded', () => {
             saveSettings();
             // Also update the main window
             window.api.send('update-skill', e.target.value);
+            // Update active skill via electronAPI too
+            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
+                window.electronAPI.updateActiveSkill(e.target.value);
+            }
+        });
+    }
+
+    // Opacity slider in settings page
+    if (opacityRange && opacityValueLabel) {
+        opacityRange.addEventListener('input', (e) => {
+            const pct = parseInt(e.target.value, 10);
+            opacityValueLabel.textContent = pct + '%';
+            const val = pct / 100;
+            if (window.electronAPI && window.electronAPI.setWindowOpacity) {
+                window.electronAPI.setWindowOpacity(val);
+            }
+            if (window.electronAPI && window.electronAPI.saveSettings) {
+                window.electronAPI.saveSettings({ windowOpacity: val });
+            }
         });
     }
 
@@ -254,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const iconElement = document.createElement('div');
             iconElement.className = 'icon-option';
             iconElement.dataset.icon = icon.key;
-            
+
             const img = document.createElement('img');
             img.src = icon.src;
             img.alt = icon.name;
@@ -269,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `./assets/icons/${icon.key}.png`,
                     `./assets/${icon.key}.png`
                 ];
-                
+
                 let pathIndex = 0;
                 const tryNextPath = () => {
                     if (pathIndex < altPaths.length) {
@@ -280,41 +308,41 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.error('All icon paths failed for:', icon.key);
                     }
                 };
-                
+
                 img.onload = () => {
                     logger.info('Icon loaded with alternative path:', img.src);
                 };
-                
+
                 img.onerror = tryNextPath;
                 tryNextPath();
             };
-            
+
             const label = document.createElement('div');
             label.textContent = icon.name;
-            
+
             iconElement.appendChild(img);
             iconElement.appendChild(label);
-            
+
             // Click handler for icon selection
-            iconElement.addEventListener('click', () => {                
+            iconElement.addEventListener('click', () => {
                 // Remove selection from all icons
                 iconGrid.querySelectorAll('.icon-option').forEach(opt => {
                     opt.classList.remove('selected');
                 });
-                
+
                 // Add selection to clicked icon
                 iconElement.classList.add('selected');
-                
+
                 // Save the selection - this should trigger the app icon change
                 window.api.send('save-settings', { selectedIcon: icon.key });
-                
+
                 // Show visual feedback
                 iconElement.style.transform = 'scale(0.95)';
                 setTimeout(() => {
                     iconElement.style.transform = 'scale(1)';
                 }, 100);
             });
-            
+
             iconGrid.appendChild(iconElement);
         });
     };

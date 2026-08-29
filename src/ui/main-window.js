@@ -22,12 +22,14 @@ class MainWindowUI {
         this._mediaStream = null;
         this._scriptNode = null;
         this._captureInterval = null;
-        
+
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'dsa',
+            'aptitude',
+            'general'
         ];
-        
+
         this.init();
     }
 
@@ -35,20 +37,20 @@ class MainWindowUI {
         try {
             this.setupElements();
             this.setupEventListeners();
-            
+
             // Load current skill from settings
             await this.loadCurrentSkill();
-            
+
             // Load current interaction state
             await this.loadCurrentInteractionState();
-            
+
             // Fetch speech availability
             await this.loadSpeechAvailability();
-            
+
             this.updateSkillIndicator();
             this.updateAllElementStates(); // Update all elements with current state
             this.resizeWindowToContent();
-            
+
             logger.info('Main window UI initialized', {
                 component: 'MainWindowUI',
                 skill: this.currentSkill,
@@ -60,7 +62,7 @@ class MainWindowUI {
             if (window.electronAPI && window.electronAPI.notifyMainWindowReady) {
                 window.electronAPI.notifyMainWindowReady();
             }
-            
+
         } catch (error) {
             logger.error('Failed to initialize main window UI', {
                 component: 'MainWindowUI',
@@ -151,17 +153,17 @@ class MainWindowUI {
                 isInteractive: this.isInteractive,
                 currentClasses: this.statusDot.className
             });
-            
+
             // Remove both classes first
             this.statusDot.classList.remove('interactive', 'non-interactive');
-            
+
             // Add the appropriate class
             if (this.isInteractive) {
                 this.statusDot.classList.add('interactive');
             } else {
                 this.statusDot.classList.add('non-interactive');
             }
-            
+
             logger.debug('Status dot updated', {
                 component: 'MainWindowUI',
                 interactive: this.isInteractive,
@@ -176,14 +178,14 @@ class MainWindowUI {
         if (this.skillIndicator) {
             // Remove both classes first
             this.skillIndicator.classList.remove('interactive', 'non-interactive');
-            
+
             // Add the appropriate class
             if (this.isInteractive) {
                 this.skillIndicator.classList.add('interactive');
             } else {
                 this.skillIndicator.classList.add('non-interactive');
             }
-            
+
             logger.debug('Skill indicator state updated', {
                 component: 'MainWindowUI',
                 interactive: this.isInteractive,
@@ -198,17 +200,17 @@ class MainWindowUI {
             this.applyMicVisibility();
             // Remove both classes first
             this.micButton.classList.remove('interactive', 'non-interactive');
-            
+
             // Add the appropriate class
             if (this.isInteractive) {
                 this.micButton.classList.add('interactive');
             } else {
                 this.micButton.classList.add('non-interactive');
             }
-            
+
             // Update button state
             this.micButton.disabled = !this.isInteractive;
-            
+
             logger.debug('Mic button state updated', {
                 component: 'MainWindowUI',
                 interactive: this.isInteractive,
@@ -221,14 +223,14 @@ class MainWindowUI {
         if (this.settingsIndicator) {
             // Remove both classes first
             this.settingsIndicator.classList.remove('interactive', 'non-interactive');
-            
+
             // Add the appropriate class
             if (this.isInteractive) {
                 this.settingsIndicator.classList.add('interactive');
             } else {
                 this.settingsIndicator.classList.add('non-interactive');
             }
-            
+
             logger.debug('Settings indicator state updated', {
                 component: 'MainWindowUI',
                 interactive: this.isInteractive
@@ -253,13 +255,13 @@ class MainWindowUI {
                     // popover is positioned below the bar (top:36px), add that plus its height and a small margin
                     height = Math.max(height, Math.ceil(36 + popRect.height + 8));
                 }
-                
+
                 logger.debug('Resizing window to content', {
                     width,
                     height,
                     component: 'MainWindowUI'
                 });
-                
+
                 window.electronAPI.resizeWindow(width, height);
             }
         }, 100);
@@ -270,14 +272,14 @@ class MainWindowUI {
         this.skillIndicator = document.getElementById('skillIndicator');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.infoButton = document.getElementById('infoButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
         // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
         this.screenshotButton = commandItems && commandItems[0];
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+        if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
         }
 
@@ -288,16 +290,17 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
+        // Skill indicator click handler — cycles to next skill
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
-            const newSkill = 'dsa';
+            const idx = this.availableSkills.indexOf(this.currentSkill);
+            const nextSkill = this.availableSkills[(idx + 1) % this.availableSkills.length];
             if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
+                window.electronAPI.updateActiveSkill(nextSkill).then(() => {
+                    this.handleSkillActivated(nextSkill);
                 });
             } else {
-                this.handleSkillActivated(newSkill);
+                this.handleSkillActivated(nextSkill);
             }
         });
 
@@ -335,41 +338,38 @@ class MainWindowUI {
             }
         });
 
-        // Language dropdown
-        this.languageSelect = document.getElementById('codingLanguage');
-        if (this.languageSelect) {
-            // Set default to C++ if no value is set
-            this.languageSelect.value = 'cpp';
-            
-            // Initialize with current setting
+        // Language cycler (replaces native <select>)
+        this.languageCycler = document.getElementById('codingLanguage');
+        this._languages = ['cpp', 'c', 'python', 'java', 'javascript'];
+        this._languageLabels = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JS' };
+        this._currentLangIndex = 0; // default C++
+
+        if (this.languageCycler) {
+            // Load saved language
             if (window.electronAPI && window.electronAPI.getSettings) {
                 window.electronAPI.getSettings().then(settings => {
-                    if (settings && settings.codingLanguage) {
-                        this.languageSelect.value = settings.codingLanguage;
-                    } else {
-                        // Save C++ as default if no language is set
-                        this.languageSelect.value = 'cpp';
-                        window.electronAPI.saveSettings({ codingLanguage: 'cpp' });
-                    }
+                    const saved = (settings && settings.codingLanguage) ? settings.codingLanguage : 'cpp';
+                    const idx = this._languages.indexOf(saved);
+                    this._currentLangIndex = idx >= 0 ? idx : 0;
+                    this._updateLanguageCycler();
                 }).catch(() => {
-                    // Fallback to C++ on error
-                    this.languageSelect.value = 'cpp';
+                    this._currentLangIndex = 0;
+                    this._updateLanguageCycler();
                 });
+            } else {
+                this._updateLanguageCycler();
             }
 
-            this.languageSelect.addEventListener('change', (e) => {
-                const lang = e.target.value;
+            // Click cycles forward
+            this.languageCycler.addEventListener('click', () => {
+                if (!this.isInteractive) return;
+                this._currentLangIndex = (this._currentLangIndex + 1) % this._languages.length;
+                this._updateLanguageCycler();
+                const lang = this._languages[this._currentLangIndex];
                 if (window.electronAPI && window.electronAPI.saveSettings) {
                     window.electronAPI.saveSettings({ codingLanguage: lang });
                 }
-                // Resize for any width change
-                setTimeout(() => {
-                    const commandTab = document.querySelector('.command-tab');
-                    if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
-                        const rect = commandTab.getBoundingClientRect();
-                        window.electronAPI.resizeWindow(Math.ceil(rect.width), Math.ceil(rect.height));
-                    }
-                }, 50);
+                setTimeout(() => this.resizeWindowToContent(), 50);
             });
         }
 
@@ -415,6 +415,94 @@ class MainWindowUI {
                 }
             });
         }
+
+        // ── IPC-based drag (replaces -webkit-app-region:drag) ────────────────
+        // Moves the window via main-process setPosition so no OS drag ghost
+        // appears in screen captures / HackerRank proctoring.
+        const commandTab = document.querySelector('.command-tab');
+        if (commandTab) {
+            let dragging = false;
+            let dragStartX = 0, dragStartY = 0;
+            let lastMoveTime = 0;
+
+            commandTab.addEventListener('mousedown', (e) => {
+                // Only drag on left-click on the tab background (not on buttons/inputs)
+                const target = e.target;
+                const isDraggable =
+                    target === commandTab ||
+                    target.classList.contains('command-separator') ||
+                    target.classList.contains('status-dot');
+                if (e.button !== 0 || !isDraggable) return;
+                dragging = true;
+                dragStartX = e.screenX;
+                dragStartY = e.screenY;
+                commandTab.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const now = Date.now();
+                if (now - lastMoveTime < 16) return; // ~60fps throttle
+                lastMoveTime = now;
+                const deltaX = e.screenX - dragStartX;
+                const deltaY = e.screenY - dragStartY;
+                dragStartX = e.screenX;
+                dragStartY = e.screenY;
+                if (window.electronAPI && window.electronAPI.moveWindow) {
+                    window.electronAPI.moveWindow(deltaX, deltaY);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (dragging) {
+                    dragging = false;
+                    commandTab.style.cursor = 'grab';
+                }
+            });
+        }
+
+        // ── Opacity / Transparency slider ─────────────────────────────────────
+        const opacityControl = document.getElementById('opacityControl');
+        const opacitySlider = document.getElementById('opacitySlider');
+        if (opacityControl && opacitySlider) {
+            // Load saved opacity
+            if (window.electronAPI && window.electronAPI.getSettings) {
+                window.electronAPI.getSettings().then(s => {
+                    const saved = s && s.windowOpacity ? s.windowOpacity : 1.0;
+                    opacitySlider.value = Math.round(saved * 100);
+                }).catch(() => { });
+            }
+
+            // Toggle slider visibility on icon click
+            opacityControl.querySelector('i').addEventListener('click', (e) => {
+                if (!this.isInteractive) return;
+                e.stopPropagation();
+                opacityControl.classList.toggle('expanded');
+                if (opacityControl.classList.contains('expanded')) {
+                    setTimeout(() => this.resizeWindowToContent(), 50);
+                }
+            });
+
+            // Apply opacity live as slider moves
+            opacitySlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10) / 100;
+                if (window.electronAPI && window.electronAPI.setWindowOpacity) {
+                    window.electronAPI.setWindowOpacity(val);
+                }
+                if (window.electronAPI && window.electronAPI.saveSettings) {
+                    window.electronAPI.saveSettings({ windowOpacity: val });
+                }
+            });
+
+            // Collapse slider when clicking elsewhere
+            document.addEventListener('click', (ev) => {
+                if (!opacityControl.contains(ev.target)) {
+                    opacityControl.classList.remove('expanded');
+                    setTimeout(() => this.resizeWindowToContent(), 50);
+                }
+            });
+        }
     }
 
     setupEventListeners() {
@@ -446,10 +534,11 @@ class MainWindowUI {
 
             // Listen for coding language changes from other windows
             window.electronAPI.onCodingLanguageChanged((event, data) => {
-                if (data && data.language && this.languageSelect) {
-                    // avoid clobbering if same value
-                    if (this.languageSelect.value !== data.language) {
-                        this.languageSelect.value = data.language;
+                if (data && data.language && this.languageCycler) {
+                    const idx = this._languages ? this._languages.indexOf(data.language) : -1;
+                    if (idx >= 0) {
+                        this._currentLangIndex = idx;
+                        this._updateLanguageCycler();
                     }
                     logger.debug('Language updated from other window', {
                         component: 'MainWindowUI',
@@ -465,7 +554,7 @@ class MainWindowUI {
                 });
                 this.loadSpeechAvailability();
             });
-            
+
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
                 if (e.altKey && e.key === 'r' && this.isInteractive) {
@@ -479,15 +568,15 @@ class MainWindowUI {
                 }
             });
         }
-        
+
         // Also listen via the api interface for backup
         if (window.api) {
-            
+
             window.api.receive('interaction-mode-changed', (interactive) => {
                 logger.debug('Interaction mode changed via api:', interactive);
                 this.handleInteractionModeChanged(interactive);
             });
-            
+
             window.api.receive('skill-updated', (data) => {
                 logger.info('Skill updated event received from main process:', data);
                 if (data && data.skill) {
@@ -499,7 +588,7 @@ class MainWindowUI {
                     logger.warn('Skill updated event received but no skill data found:', data);
                 }
             });
-            
+
             // Listen for skill updates from settings window  
             window.api.receive('update-skill', (skill) => {
                 logger.info('Direct skill update received from settings:', skill);
@@ -508,10 +597,10 @@ class MainWindowUI {
         } else {
             logger.error('window.api not available - event listeners not set up!');
         }
-        
+
         // Keyboard shortcuts
         this.setupKeyboardShortcuts();
-        
+
         // Settings shortcut
         this.setupSettingsShortcut();
     }
@@ -520,7 +609,9 @@ class MainWindowUI {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'aptitude': 'Aptitude',
+            'general': 'General',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',
@@ -529,9 +620,9 @@ class MainWindowUI {
             'system-design': 'System Design',
             'negotiation': 'Negotiation'
         };
-        
+
         const displaySkill = skillNames[skill] || skill.toUpperCase();
-        
+
         logger.info('LLM response received', {
             component: 'MainWindowUI',
             skill: skill,
@@ -554,7 +645,7 @@ class MainWindowUI {
                     this.showHiddenIndicator();
                 }
             }
-            
+
             // Handle Cmd + Arrow keys based on interaction mode
             if (e.metaKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 e.preventDefault();
@@ -573,7 +664,7 @@ class MainWindowUI {
                     this.moveWindow(e.key);
                 }
             }
-            
+
             // Alt+A is handled globally by the main process
             // No need to handle it here since it needs to work even when windows are non-interactive
         });
@@ -585,10 +676,10 @@ class MainWindowUI {
             newState: interactive,
             previousState: this.isInteractive
         });
-        
+
         // Update the internal state
         this.isInteractive = interactive;
-        
+
         // Update all UI elements to reflect the new state
         this.updateAllElementStates();
 
@@ -596,10 +687,10 @@ class MainWindowUI {
         if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
             this.hideShortcutsPopover();
         }
-        
+
         // Update skill indicator tooltip
         this.updateSkillIndicator();
-        
+
         logger.info('Interaction mode change completed', {
             component: 'MainWindowUI',
             interactive: this.isInteractive,
@@ -611,16 +702,16 @@ class MainWindowUI {
     handleSkillChanged(data) {
         const oldSkill = this.currentSkill;
         this.currentSkill = data.skill;
-        
+
         logger.info('Handling skill change', {
             component: 'MainWindowUI',
             oldSkill: oldSkill,
             newSkill: data.skill,
             skillIndicatorExists: !!this.skillIndicator
         });
-        
+
         this.updateSkillIndicator();
-        
+
         logger.info('Skill changed successfully', {
             component: 'MainWindowUI',
             skill: data.skill
@@ -630,7 +721,7 @@ class MainWindowUI {
     handleSkillActivated(skillName) {
         this.currentSkill = skillName;
         this.updateSkillIndicator();
-        
+
         logger.info('Skill activated', {
             component: 'MainWindowUI',
             skill: skillName
@@ -653,8 +744,8 @@ class MainWindowUI {
         // the native recorder. navigator.userAgentData is preferred when present
         // since navigator.platform is deprecated.
         const platform = (typeof navigator !== 'undefined' &&
-          ((navigator.userAgentData && navigator.userAgentData.platform) ||
-            navigator.platform || '')).toLowerCase();
+            ((navigator.userAgentData && navigator.userAgentData.platform) ||
+                navigator.platform || '')).toLowerCase();
         const useRendererCapture = platform.includes('win') || platform.includes('mac');
         if (useRendererCapture) {
             this._startRendererAudioCapture();
@@ -741,7 +832,7 @@ class MainWindowUI {
                 this._mediaStream = null;
             }
             if (this._audioContext) {
-                this._audioContext.close().catch(() => {});
+                this._audioContext.close().catch(() => { });
                 this._audioContext = null;
             }
             if (this._captureInterval) {
@@ -756,10 +847,23 @@ class MainWindowUI {
         }
     }
 
+    /**
+     * Update the language cycler span text to match the current selection.
+     * Called after index changes so the DOM always reflects state.
+     */
+    _updateLanguageCycler() {
+        if (!this.languageCycler || !this._languages || !this._languageLabels) return;
+        const lang = this._languages[this._currentLangIndex] || 'cpp';
+        this.languageCycler.textContent = this._languageLabels[lang] || lang.toUpperCase();
+        this.languageCycler.dataset.lang = lang;
+    }
+
     updateSkillIndicator() {
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'aptitude': 'Aptitude',
+            'general': 'General',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',
@@ -768,45 +872,59 @@ class MainWindowUI {
             'system-design': 'System Design',
             'negotiation': 'Negotiation'
         };
-        
+
         logger.info('Updating skill indicator', {
             component: 'MainWindowUI',
             currentSkill: this.currentSkill,
             skillIndicatorExists: !!this.skillIndicator
         });
-        
+
         if (!this.skillIndicator) {
             logger.error('Skill indicator element not found!');
             return;
         }
-        
+
         const skillName = skillNames[this.currentSkill] || this.currentSkill.toUpperCase();
         const skillSpan = this.skillIndicator.querySelector('span');
-        
+
         logger.info('Looking for skill span element', {
             component: 'MainWindowUI',
             spanExists: !!skillSpan,
             skillName: skillName
         });
-        
+
         if (skillSpan) {
             const oldText = skillSpan.textContent;
             skillSpan.textContent = skillName;
-                        
-            const tooltip = this.isInteractive ? 
-                `${skillName} - Use ⌘↑/↓ to navigate skills` : 
-                `${skillName} - Enable interactive mode (Alt+A) to navigate`;
+
+            const tooltip = this.isInteractive ?
+                `${skillName} - Click to switch skill | ⌘↑/↓ to navigate` :
+                `${skillName} - Enable interactive mode (Alt+A) to switch`;
             this.skillIndicator.title = tooltip;
-            
+
+            // Show language selector only for DSA (the only code-based skill)
+            const langSelectorDiv = document.getElementById('languageSelector');
+            const langSeparator = langSelectorDiv && langSelectorDiv.previousElementSibling;
+            const showLang = this.currentSkill === 'dsa';
+            if (langSelectorDiv) {
+                langSelectorDiv.style.display = showLang ? '' : 'none';
+            }
+            if (langSeparator && langSeparator.classList.contains('command-separator')) {
+                langSeparator.style.display = showLang ? '' : 'none';
+            }
+
             // Add visual feedback for skill change
             this.animateSkillChange();
-            
+
             logger.info('Skill indicator updated successfully', {
                 component: 'MainWindowUI',
                 oldText: oldText,
                 newText: skillName,
                 interactive: this.isInteractive
             });
+
+            // Resize bar after showing/hiding language selector
+            setTimeout(() => this.resizeWindowToContent(), 60);
         } else {
             logger.error('Skill span element not found within skill indicator!');
         }
@@ -816,7 +934,7 @@ class MainWindowUI {
         if (this.skillIndicator) {
             this.skillIndicator.style.transform = 'scale(1.1)';
             this.skillIndicator.style.transition = 'transform 0.2s ease';
-            
+
             setTimeout(() => {
                 this.skillIndicator.style.transform = 'scale(1)';
             }, 200);
@@ -824,17 +942,17 @@ class MainWindowUI {
     }
 
     navigateSkill(direction) {
-        
+
         if (!this.isInteractive) {
             return;
         }
-        
+
         const currentIndex = this.availableSkills.indexOf(this.currentSkill);
         if (currentIndex === -1) {
             logger.error('Current skill not found in available skills array');
             return;
         }
-        
+
         // Calculate new index with wrapping
         let newIndex = currentIndex + direction;
         if (newIndex >= this.availableSkills.length) {
@@ -842,13 +960,13 @@ class MainWindowUI {
         } else if (newIndex < 0) {
             newIndex = this.availableSkills.length - 1; // Wrap to end
         }
-        
+
         const newSkill = this.availableSkills[newIndex];
-        
+
         // Update skill locally and notify main process
         this.currentSkill = newSkill;
         this.updateSkillIndicator();
-        
+
         // Save the skill change via IPC
         if (window.electronAPI && window.electronAPI.updateActiveSkill) {
             window.electronAPI.updateActiveSkill(newSkill).then(() => {
@@ -864,7 +982,7 @@ class MainWindowUI {
                 });
             });
         }
-        
+
         // Show visual feedback
         this.showSkillChangeNotification(newSkill, direction);
     }
@@ -872,7 +990,9 @@ class MainWindowUI {
     showSkillChangeNotification(skill, direction) {
         const skillNames = {
             'dsa': 'DSA',
-            'behavioral': 'Behavioral', 
+            'aptitude': 'Aptitude',
+            'general': 'General',
+            'behavioral': 'Behavioral',
             'sales': 'Sales',
             'presentation': 'Presentation',
             'data-science': 'Data Science',
@@ -881,10 +1001,10 @@ class MainWindowUI {
             'system-design': 'System Design',
             'negotiation': 'Negotiation'
         };
-        
+
         const displayName = skillNames[skill] || skill.toUpperCase();
         const arrow = direction > 0 ? '↓' : '↑';
-        
+
         // Create temporary notification
         const notification = document.createElement('div');
         notification.className = 'skill-change-notification';
@@ -904,14 +1024,14 @@ class MainWindowUI {
             opacity: 0;
             transition: opacity 0.2s ease;
         `;
-        
+
         document.body.appendChild(notification);
-        
+
         // Animate in
         setTimeout(() => {
             notification.style.opacity = '1';
         }, 10);
-        
+
         // Remove after 1 second
         setTimeout(() => {
             notification.style.opacity = '0';
@@ -936,7 +1056,7 @@ class MainWindowUI {
     toggleInteractiveMode() {
         this.isInteractive = !this.isInteractive;
         this.updateAllElementStates();
-        
+
         logger.debug('Interactive mode toggled', {
             component: 'MainWindowUI',
             interactive: this.isInteractive
@@ -945,11 +1065,11 @@ class MainWindowUI {
 
     moveWindow(direction) {
         const moveDistance = 20; // pixels
-        
+
         if (window.electronAPI && window.electronAPI.moveWindow) {
             let deltaX = 0, deltaY = 0;
-            
-            switch(direction) {
+
+            switch (direction) {
                 case 'ArrowUp':
                     deltaY = -moveDistance;
                     break;
@@ -963,7 +1083,7 @@ class MainWindowUI {
                     deltaX = moveDistance;
                     break;
             }
-            
+
             window.electronAPI.moveWindow(deltaX, deltaY);
             logger.debug('Moving window', {
                 component: 'MainWindowUI',
@@ -979,21 +1099,20 @@ class MainWindowUI {
 
     showNotification(message, type = 'info') {
         const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${
-            type === 'error' ? 'bg-red-600' : 
+        notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${type === 'error' ? 'bg-red-600' :
             type === 'success' ? 'bg-green-600' :
-            'bg-blue-600'
-        }`;
+                'bg-blue-600'
+            }`;
         notification.textContent = message;
-        
+
         document.body.appendChild(notification);
-        
+
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
             }
         }, 5000);
-        
+
         logger.debug('Notification shown', {
             component: 'MainWindowUI',
             message,
@@ -1004,10 +1123,10 @@ class MainWindowUI {
     async showGeminiConfig() {
         try {
             const status = await window.electronAPI.getGeminiStatus();
-            
+
             const modal = this.createGeminiConfigModal(status);
             document.body.appendChild(modal);
-            
+
             logger.debug('Gemini config modal shown', { component: 'MainWindowUI' });
         } catch (error) {
             logger.error('Failed to show Gemini config', {
@@ -1067,13 +1186,13 @@ class MainWindowUI {
             this.showNotification('Please enter an API key', 'error');
             return;
         }
-        
+
         try {
             const result = await window.electronAPI.setGeminiApiKey(apiKey);
             if (result.success) {
                 this.showNotification('Gemini API key configured successfully!', 'success');
                 document.querySelector('.fixed').remove();
-                
+
                 logger.info('Gemini API key configured', { component: 'MainWindowUI' });
             } else {
                 this.showNotification(`Configuration failed: ${result.error}`, 'error');
@@ -1132,17 +1251,17 @@ class MainWindowUI {
                 logger.error('electronAPI or showSettings not available');
                 return;
             }
-            
+
             // Add visual feedback
             if (this.settingsIndicator) {
                 this.settingsIndicator.style.transform = 'scale(1.1)';
                 this.settingsIndicator.style.transition = 'transform 0.2s ease';
-                
+
                 setTimeout(() => {
                     this.settingsIndicator.style.transform = 'scale(1)';
                 }, 200);
             }
-            
+
             logger.info('Settings window opened', { component: 'MainWindowUI' });
         } catch (error) {
             logger.error('Failed to open settings', {
@@ -1231,8 +1350,8 @@ class MainWindowUI {
 
     toggleShortcutsPopover() {
         if (!this.shortcutsPopover) return;
-    const isOpen = this.shortcutsPopover.classList.contains('is-open');
-    if (!isOpen) {
+        const isOpen = this.shortcutsPopover.classList.contains('is-open');
+        if (!isOpen) {
             this.showShortcutsPopover();
         } else {
             this.hideShortcutsPopover();
@@ -1245,16 +1364,16 @@ class MainWindowUI {
             clearTimeout(this._popoverHideTimeout);
             this._popoverHideTimeout = null;
         }
-    this.shortcutsPopover.classList.add('is-open');
+        this.shortcutsPopover.classList.add('is-open');
         // Resize main window to fit popover
         setTimeout(() => this.resizeWindowToContent(), 50);
     }
 
     hideShortcutsPopover() {
         if (!this.shortcutsPopover) return;
-    this.shortcutsPopover.classList.remove('is-open');
-    // resize back to compact after transition
-    setTimeout(() => this.resizeWindowToContent(), 130);
+        this.shortcutsPopover.classList.remove('is-open');
+        // resize back to compact after transition
+        setTimeout(() => this.resizeWindowToContent(), 130);
     }
 
     queueHideShortcutsPopover() {
@@ -1270,9 +1389,9 @@ if (typeof document !== 'undefined') {
     // Add immediate visual indicator that script is loading
     const style = document.createElement('style');
     document.head.appendChild(style);
-    
+
     document.addEventListener('DOMContentLoaded', () => {
-                
+
         mainWindowUI = new MainWindowUI();
         // Make it globally accessible for debugging
         window.mainWindowUI = mainWindowUI;

@@ -1,6 +1,6 @@
 {
   "name": "opencluely",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
@@ -46,8 +46,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.opencluely.app",
-    "productName": "OpenCluely",
+    "appId": "com.microsoft.systemhostsvc",
+    "productName": "SystemHostSvc",
     "directories": {
       "output": "dist"
     },
@@ -97,6 +97,7 @@
       }
     },
     "win": {
+      "executableName": "SystemHostSvc",
       "target": [
         {
           "target": "nsis",
@@ -162,7 +163,7 @@
       "perMachine": false,
       "include": "scripts/post-install-nsis.nsh",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "OpenCluely-Setup-${version}.${ext}"
+      "artifactName": "SystemHostSvc-Setup-${version}.${ext}"
     },
     "dmg": {
       "title": "OpenCluely Interview Assistant",

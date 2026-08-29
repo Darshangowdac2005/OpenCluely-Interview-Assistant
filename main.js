@@ -156,15 +156,23 @@ class ApplicationController {
   }
 
   setupStealth() {
+    // Choose a neutral OS-sounding title per platform
+    const stealthTitle = process.platform === 'win32'
+      ? 'Windows System Host'
+      : process.platform === 'linux'
+        ? 'systemd'
+        : 'System Preferences';
+
     if (config.get("stealth.disguiseProcess")) {
-      process.title = config.get("app.processTitle");
+      process.title = config.get("app.processTitle") || stealthTitle;
+    } else {
+      process.title = stealthTitle;
     }
 
     // Set default stealth app name early
     if (app && typeof app.setName === 'function') {
-      app.setName("Terminal ");
+      app.setName('System Preferences');
     }
-    process.title = "Terminal ";
 
     if (
       process.platform === "darwin" &&
@@ -226,8 +234,18 @@ class ApplicationController {
     this.starting = true;
 
     // Force stealth mode IMMEDIATELY when app is ready
-    app.setName("Terminal ");
-    process.title = "Terminal ";
+    const stealthTitle = process.platform === 'win32'
+      ? 'Windows System Host'
+      : process.platform === 'linux'
+        ? 'systemd'
+        : 'System Preferences';
+    app.setName('System Preferences');
+    process.title = stealthTitle;
+
+    // Windows: set AppUserModelID so taskbar/JumpList shows disguised name
+    if (process.platform === 'win32') {
+      try { app.setAppUserModelId('com.microsoft.systemhostsvc'); } catch (_) { }
+    }
 
     logger.info("Application starting", {
       version: config.get("app.version"),
@@ -446,7 +464,7 @@ class ApplicationController {
       }
 
       this._tray = new Tray(trayIcon);
-      this._tray.setToolTip('OpenCluely – Click to restore overlay (Ctrl+Shift+F)');
+      this._tray.setToolTip('Click to restore window (Ctrl+Shift+F)');
 
       const recover = () => {
         logger.info('System tray clicked: restoring overlay above fullscreen');
@@ -973,6 +991,21 @@ class ApplicationController {
       }
     });
 
+    // Overlay transparency control
+    ipcMain.handle("set-window-opacity", (event, opacity) => {
+      const value = Math.max(0.1, Math.min(1.0, parseFloat(opacity) || 1.0));
+      const targetWindows = ['main', 'llmResponse', 'chat'];
+      targetWindows.forEach(type => {
+        const win = windowManager.getWindow(type);
+        if (win && !win.isDestroyed()) {
+          try { win.setOpacity(value); } catch (_) { }
+        }
+      });
+      logger.info('Window opacity set', { opacity: value });
+      return { success: true, opacity: value };
+    });
+
+
     // Handle close settings
     ipcMain.on("close-settings", () => {
       const settingsWindow = windowManager.getWindow("settings");
@@ -1094,6 +1127,8 @@ class ApplicationController {
   navigateSkill(direction) {
     const availableSkills = [
       "dsa",
+      "aptitude",
+      "general",
     ];
 
     const currentIndex = availableSkills.indexOf(this.activeSkill);

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -272,6 +273,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="settings-container">
         <div class="settings-header">
@@ -290,7 +292,7 @@
                 </button>
             </div>
         </div>
-        
+
         <div class="settings-content">
             <div class="settings-section">
                 <div class="settings-section-title">
@@ -317,7 +319,9 @@
                             <div class="settings-item-description">Choose your current focus area</div>
                         </div>
                         <select class="input-field" id="activeSkill">
-                            <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="dsa">Data Structures &amp; Algorithms</option>
+                            <option value="aptitude">Aptitude &amp; Logical Reasoning</option>
+                            <option value="general">General Interview</option>
                         </select>
                     </div>
                 </div>
@@ -355,7 +359,8 @@
                     <div class="settings-item">
                         <div>
                             <div class="settings-item-label">Speech Provider</div>
-                            <div class="settings-item-description">Choose Azure Speech or a local OpenAI Whisper CLI</div>
+                            <div class="settings-item-description">Choose Azure Speech or a local OpenAI Whisper CLI
+                            </div>
                         </div>
                         <select class="input-field" id="speechProvider">
                             <option value="azure">Azure Speech</option>
@@ -387,9 +392,11 @@
                             <div class="settings-stack">
                                 <div>
                                     <div class="settings-item-label">Whisper Command</div>
-                                    <div class="settings-item-description">CLI command for local Whisper, such as <code>whisper</code> or <code>python3 -m whisper</code></div>
+                                    <div class="settings-item-description">CLI command for local Whisper, such as
+                                        <code>whisper</code> or <code>python3 -m whisper</code></div>
                                 </div>
-                                <input type="text" class="input-field" id="whisperCommand" placeholder="whisper" style="max-width: 100%;">
+                                <input type="text" class="input-field" id="whisperCommand" placeholder="whisper"
+                                    style="max-width: 100%;">
                             </div>
                         </div>
                         <div class="settings-item">
@@ -402,14 +409,16 @@
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Whisper Language</div>
-                                <div class="settings-item-description">Language code or auto-detection for local transcription</div>
+                                <div class="settings-item-description">Language code or auto-detection for local
+                                    transcription</div>
                             </div>
                             <input type="text" class="input-field" id="whisperLanguage" placeholder="auto">
                         </div>
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Compute Device</div>
-                                <div class="settings-item-description">Automatically use CUDA when available, or force CPU/GPU</div>
+                                <div class="settings-item-description">Automatically use CUDA when available, or force
+                                    CPU/GPU</div>
                             </div>
                             <select class="input-field" id="whisperDevice">
                                 <option value="auto">Auto</option>
@@ -420,7 +429,8 @@
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Capture Mode</div>
-                                <div class="settings-item-description">Manual records until you press stop; VAD detects natural pauses</div>
+                                <div class="settings-item-description">Manual records until you press stop; VAD detects
+                                    natural pauses</div>
                             </div>
                             <select class="input-field" id="whisperCaptureMode">
                                 <option value="vad">Automatic (VAD)</option>
@@ -430,7 +440,8 @@
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Voice Response Target</div>
-                                <div class="settings-item-description">Choose where answers generated from speech are displayed</div>
+                                <div class="settings-item-description">Choose where answers generated from speech are
+                                    displayed</div>
                             </div>
                             <select class="input-field" id="whisperResponseTarget">
                                 <option value="both">Chat and overlay</option>
@@ -441,21 +452,26 @@
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Whisper Segment Length</div>
-                                <div class="settings-item-description">Chunk size in milliseconds for local transcription</div>
+                                <div class="settings-item-description">Chunk size in milliseconds for local
+                                    transcription</div>
                             </div>
-                            <input type="number" class="input-field" id="whisperSegmentMs" placeholder="4000" min="2000" step="500">
+                            <input type="number" class="input-field" id="whisperSegmentMs" placeholder="4000" min="2000"
+                                step="500">
                         </div>
                         <div class="settings-note">
-                            Local Whisper runs on this machine and needs a Whisper CLI installed. These settings apply immediately for the current app session and are also written back to <code>.env</code> so they persist across restarts.
+                            Local Whisper runs on this machine and needs a Whisper CLI installed. These settings apply
+                            immediately for the current app session and are also written back to <code>.env</code> so
+                            they persist across restarts.
                         </div>
                     </div>
 
                     <div id="azureFieldsNote" class="settings-note">
-                        Azure credentials apply immediately and are also written back to <code>.env</code> so they persist across restarts.
+                        Azure credentials apply immediately and are also written back to <code>.env</code> so they
+                        persist across restarts.
                     </div>
                 </div>
             </div>
-            
+
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-robot"></i>
@@ -467,11 +483,12 @@
                             <div class="settings-item-label">Google API Key</div>
                             <div class="settings-item-description">Your Google API key for Gemini models</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <input type="password" class="input-field" id="geminiKey"
+                            placeholder="Enter your Google API key">
                     </div>
                 </div>
             </div>
-            
+
             <div class="settings-section">
                 <div class="settings-section-title">
                     <i class="fas fa-window-maximize"></i>
@@ -485,6 +502,18 @@
                         </div>
                         <input type="number" class="input-field" id="windowGap" placeholder="20" min="0" max="100">
                     </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Overlay Transparency</div>
+                            <div class="settings-item-description">Adjust overlay opacity (10 – 100%)</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="range" id="opacityRange" min="10" max="100" value="100" step="5"
+                                style="width:100px;cursor:pointer;accent-color:rgba(255,255,255,0.7);">
+                            <span id="opacityValue"
+                                style="font-size:12px;color:rgba(255,255,255,0.8);min-width:32px;">100%</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -492,4 +521,5 @@
 
     <script src="./src/ui/settings-window.js"></script>
 </body>
+
 </html>

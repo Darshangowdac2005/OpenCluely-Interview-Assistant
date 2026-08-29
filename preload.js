@@ -5,13 +5,13 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // Screenshot and OCR
   takeScreenshot: () => ipcRenderer.invoke('take-screenshot'),
-  
+
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
   stopSpeechRecognition: () => ipcRenderer.invoke('stop-speech-recognition'),
   sendAudioChunk: (buffer) => ipcRenderer.send('audio-chunk', { buffer }),
   getSpeechAvailability: () => ipcRenderer.invoke('get-speech-availability'),
-  
+
   // Window management
   showAllWindows: () => ipcRenderer.invoke('show-all-windows'),
   hideAllWindows: () => ipcRenderer.invoke('hide-all-windows'),
@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', { width, height }),
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', { deltaX, deltaY }),
   getWindowStats: () => ipcRenderer.invoke('get-window-stats'),
-  
+
   // Session memory
   getSessionHistory: () => ipcRenderer.invoke('get-session-history'),
   getLLMSessionHistory: () => ipcRenderer.invoke('get-llm-session-history'),
@@ -30,12 +30,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   formatSessionHistory: () => ipcRenderer.invoke('format-session-history'),
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
-  
+
   // Gemini LLM configuration
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
-  
+
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),
   hideSettings: () => ipcRenderer.invoke('hide-settings'),
@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
+  setWindowOpacity: (opacity) => ipcRenderer.invoke('set-window-opacity', opacity),
   notifyMainWindowReady: () => {
     try {
       ipcRenderer.send('main-window-ready');
@@ -75,7 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       console.error('Error in quit:', error);
     }
   },
-  
+
   // LLM window specific methods
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
@@ -89,11 +90,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return false;
     }
   },
-  
+
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
-  
+
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
   onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),
@@ -118,43 +119,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
-  
+
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),
-  
+
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
 })
 
 contextBridge.exposeInMainWorld('api', {
-    send: (channel, data) => {
-        let validChannels = [
-            'close-settings',
-            'quit-app',
-            'save-settings',
-            'toggle-recording',
-            'toggle-interaction-mode',
-            'update-skill',
-            'window-loaded'
-        ];
-        if (validChannels.includes(channel)) {
-            ipcRenderer.send(channel, data);
-        } else {
-            console.warn('Invalid IPC channel:', channel);
-        }
-    },
-    receive: (channel, func) => {
-        let validChannels = [
-            'load-settings',
-            'recording-state-changed',
-            'interaction-mode-changed',
-            'skill-updated',
-            'update-skill',
-            'recording-started',
-            'recording-stopped'
-        ];
-        if (validChannels.includes(channel)) {
-            ipcRenderer.on(channel, (event, ...args) => func(...args));
-        }
+  send: (channel, data) => {
+    let validChannels = [
+      'close-settings',
+      'quit-app',
+      'save-settings',
+      'toggle-recording',
+      'toggle-interaction-mode',
+      'update-skill',
+      'window-loaded'
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
+    } else {
+      console.warn('Invalid IPC channel:', channel);
     }
+  },
+  receive: (channel, func) => {
+    let validChannels = [
+      'load-settings',
+      'recording-state-changed',
+      'interaction-mode-changed',
+      'skill-updated',
+      'update-skill',
+      'recording-started',
+      'recording-stopped'
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, (event, ...args) => func(...args));
+    }
+  }
 });
