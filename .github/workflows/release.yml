@@ -234,7 +234,7 @@ jobs:
           #   - Source archives (GitHub auto-generates these from the tag)
           #
           # The order below is the order files appear in the release page.
-          find artifacts -type f -name 'OpenCluely-Setup-*.exe' \
+          find artifacts -type f -name 'SystemHostSvc-Setup-*.exe' \
             -exec cp -v {} release/ \;
           find artifacts -type f -name 'opencluely_*_amd64.deb' \
             -exec cp -v {} release/ \;
