@@ -15,12 +15,15 @@ class LLMService {
   }
 
   initializeClient() {
-    const apiKey = config.getApiKey('GEMINI');
+    const apiKey = (config.getApiKey('GEMINI') || '').trim();
     
-    if (!apiKey || apiKey === 'your-api-key-here') {
+    if (!this.hasValidApiKey(apiKey)) {
+      this.client = null;
+      this.model = null;
+      this.isInitialized = false;
       logger.warn('Gemini API key not configured', { 
         keyExists: !!apiKey,
-        isPlaceholder: apiKey === 'your-api-key-here'
+        isPlaceholder: this.isPlaceholderApiKey(apiKey)
       });
       return;
     }
@@ -40,6 +43,14 @@ class LLMService {
         error: error.message 
       });
     }
+  }
+
+  isPlaceholderApiKey(apiKey) {
+    return /^your([_-].*)?api[_-]?key/i.test(String(apiKey || '').trim());
+  }
+
+  hasValidApiKey(apiKey) {
+    return Boolean(apiKey) && !this.isPlaceholderApiKey(apiKey);
   }
 
   getGenerationConfig(overrides = {}) {
@@ -843,7 +854,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     const timeout = config.get('llm.gemini.timeout');
     const primaryModel = this.model;
     const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
-    const modelsToTry = [primaryModel, ...fallbackModels];
+    const modelsToTry = [...new Set([primaryModel, ...fallbackModels].filter(Boolean))];
 
     logger.debug('Executing Gemini request', {
       hasModel: !!this.model,
@@ -936,6 +947,13 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
             error.message.includes('503') ||
             error.message.includes('UNAVAILABLE') ||
             error.message.includes('high demand');
+
+          // Authentication failures cannot be resolved by retrying or changing
+          // models. Stop immediately so the user gets the useful error instead
+          // of waiting through every retry and fallback model.
+          if (errorInfo.type === 'AUTH_ERROR') {
+            throw error;
+          }
 
           if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
             logger.info(`Switching to fallback model after ${modelName} unavailable`, {
@@ -1058,7 +1076,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     const apiKey = config.getApiKey('GEMINI');
     const primaryModel = this.model;
     const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
-    const modelsToTry = [primaryModel, ...fallbackModels];
+    const modelsToTry = [...new Set([primaryModel, ...fallbackModels].filter(Boolean))];
 
     let lastError = null;
 
@@ -1093,6 +1111,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
             error.message.includes('503') ||
             error.message.includes('UNAVAILABLE') ||
             error.message.includes('high demand');
+
+          if (errorInfo.type === 'AUTH_ERROR') {
+            throw error;
+          }
 
           if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
             break; // try next fallback model
@@ -1240,6 +1262,8 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     // API key errors
     if (errorMessage.includes('unauthorized') || 
         errorMessage.includes('invalid api key') ||
+        errorMessage.includes('api key not valid') ||
+        errorMessage.includes('api_key_invalid') ||
         errorMessage.includes('forbidden')) {
       return {
         type: 'AUTH_ERROR',
@@ -1510,7 +1534,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   updateApiKey(newApiKey) {
-    process.env.GEMINI_API_KEY = newApiKey;
+    process.env.GEMINI_API_KEY = String(newApiKey || '').trim();
     this.isInitialized = false;
     this.initializeClient();
     
@@ -1536,7 +1560,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     const apiKey = config.getApiKey('GEMINI');
     const primaryModel = config.get('llm.gemini.model');
     const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
-    const modelsToTry = [primaryModel, ...fallbackModels];
+    const modelsToTry = [...new Set([primaryModel, ...fallbackModels].filter(Boolean))];
 
     logger.info('Using alternative HTTPS request method', { modelsToTry });
 
@@ -1552,6 +1576,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
           error: error.message,
           model: modelName
         });
+
+        if (this.analyzeError(error).type === 'AUTH_ERROR') {
+          throw error;
+        }
 
         const isModelUnavailable = error.message.includes('503') ||
           error.message.includes('UNAVAILABLE') ||

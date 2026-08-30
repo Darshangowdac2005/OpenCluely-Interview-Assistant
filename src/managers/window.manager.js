@@ -397,7 +397,9 @@ class WindowManager {
         closable: false,
         hasShadow: false,
         thickFrame: false,
-        focusable: false,  // Prevent answer panel from stealing focus from exam browser
+        // This is an ordinary interactive window: its close button and native
+        // drag region require normal OS pointer/focus handling.
+        focusable: true,
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
@@ -490,7 +492,7 @@ class WindowManager {
     this.applyStealthMeasures(window, type);
 
     // Initialize interaction mode based on current state for ALL windows
-    if (this.isInteractive) {
+    if (type === 'llmResponse' || this.isInteractive) {
       window.setIgnoreMouseEvents(false);
     } else {
       window.setIgnoreMouseEvents(true, { forward: true });
@@ -701,6 +703,10 @@ class WindowManager {
     });
 
     window.on('focus', () => {
+      // These are ordinary interactive windows. Blurring them from a global
+      // focus handler prevents native controls and text inputs from working.
+      if (type === 'llmResponse' || type === 'settings' || type === 'onboarding') return;
+
       // Belt-and-suspenders: if the overlay ever receives OS focus (shouldn't
       // happen with focusable:false), immediately release it so the exam
       // browser window stays in the foreground. This prevents SafeExam Browser
@@ -1169,7 +1175,9 @@ class WindowManager {
       if (!window.isDestroyed()) {
         // Settings and onboarding windows must ALWAYS be clickable so the user
         // can type in input fields (API key, etc.). Never make them click-through.
-        const isAlwaysInteractive = (type === 'settings' || type === 'onboarding');
+        // The LLM response window needs pointer input for its close button,
+        // content actions, and native drag region while it is displayed.
+        const isAlwaysInteractive = (type === 'settings' || type === 'onboarding' || type === 'llmResponse');
 
         if (isAlwaysInteractive) {
           window.setIgnoreMouseEvents(false);
@@ -1179,8 +1187,9 @@ class WindowManager {
           window.setIgnoreMouseEvents(true, { forward: true });
         }
 
-        // Re-enforce non-focusable after every interaction mode change.
-        if (type === 'main' || type === 'llmResponse') {
+        // The toolbar is non-focusable, but the response panel must retain
+        // normal focus behavior for its native controls and drag region.
+        if (type === 'main') {
           try { window.setFocusable(false); } catch (_) { /* not supported on all platforms */ }
         }
 
@@ -1365,12 +1374,24 @@ class WindowManager {
       return;
     }
 
+    // The response window owns interactive controls (close, copy, and native
+    // drag), so always restore normal mouse handling before showing it.
+    try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
+    try { llmWindow.setFocusable(true); } catch (_) { }
+    try { llmWindow.setMovable(true); } catch (_) { }
+
     logger.debug('Sending display-llm-response event to window');
     llmWindow.webContents.send('display-llm-response', {
       content,
       metadata,
       timestamp: new Date().toISOString()
     });
+
+    // If user explicitly closed the window during analysis, silently ignore the response visual update
+    if (this.llmUserHidden) {
+      logger.info('LLM response received but window was hidden by user. Skipping visual pop-up.');
+      return;
+    }
 
     logger.debug('Showing and focusing LLM window');
     this.showOnCurrentDesktop(llmWindow);
@@ -1397,6 +1418,14 @@ class WindowManager {
     const llmWindow = this.windows.get('llmResponse');
     if (llmWindow) {
       logger.debug('Showing LLM loading state');
+
+      // Reset the user hidden flag since this is a brand new transcription/interaction request
+      this.llmUserHidden = false;
+
+      try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
+      try { llmWindow.setFocusable(true); } catch (_) { }
+      try { llmWindow.setMovable(true); } catch (_) { }
+
       llmWindow.webContents.send('show-loading');
       this.showOnCurrentDesktop(llmWindow);
 
@@ -1423,8 +1452,13 @@ class WindowManager {
 
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
+      // Settings contains text inputs and selects. Restore normal interaction
+      // whenever it is opened in case another mode previously changed it.
+      try { settingsWindow.setIgnoreMouseEvents(false); } catch (_) { }
+      try { settingsWindow.setFocusable(true); } catch (_) { }
       this.showOnCurrentDesktop(settingsWindow);
       this.centerWindow(settingsWindow); // This now positions at top-center
+      settingsWindow.focus();
 
       // Notify that settings window is shown
       setTimeout(() => {

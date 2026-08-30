@@ -12,13 +12,13 @@ class ConfigManager {
     this.config = {
       app: {
         name: 'OpenCluely',
-        version: '1.0.0',
+        version: '1.1.0',
         processTitle: 'OpenCluely',
         dataDir: this.appDataDir,
         isDevelopment: this.env === 'development',
         isProduction: this.env === 'production'
       },
-      
+
       window: {
         defaultWidth: 400,
         defaultHeight: 600,
@@ -40,8 +40,8 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          model: 'gemini-3.1-flash-lite',
-          fallbackModels: ['gemini-2.5-flash-lite', 'gemini-3.5-flash'],
+          model: 'gemini-2.5-flash-lite',
+          fallbackModels: ['gemini-3.5-flash-lite', 'gemini-3.7-flash'],
           maxRetries: 3,
           timeout: 30000,
           fallbackEnabled: true,

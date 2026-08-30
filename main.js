@@ -685,6 +685,22 @@ class ApplicationController {
       return sessionManager.getOptimizedHistory();
     });
 
+    // Aliases exposed in preload.js — handlers were previously missing, which
+    // caused renderer calls to getLLMSessionHistory() / formatSessionHistory()
+    // to silently hang indefinitely (unresolved Promises).
+    ipcMain.handle("get-llm-session-history", () => {
+      return sessionManager.getOptimizedHistory();
+    });
+
+    ipcMain.handle("format-session-history", () => {
+      try {
+        const history = sessionManager.getOptimizedHistory();
+        return typeof history === "string" ? history : JSON.stringify(history, null, 2);
+      } catch (e) {
+        return "";
+      }
+    });
+
     ipcMain.handle("clear-session-memory", () => {
       sessionManager.clear();
       windowManager.broadcastToAllWindows("session-cleared");
@@ -947,23 +963,55 @@ class ApplicationController {
 
     ipcMain.handle("close-window", (event) => {
       const webContents = event.sender;
-      // Use Array.from so we can find the matching window and hide it
+      logger.info(`[IPC] close-window called by sender ID: ${webContents?.id}`);
+      let hideCount = 0;
+
+      // Compare by ID because object reference equality on webContents can fail between IPC contexts
       for (const [type, win] of windowManager.windows) {
-        if (!win.isDestroyed() && win.webContents === webContents) {
-          win.hide();
-          logger.debug('close-window: hid window', { type });
-          break;
+        if (!win.isDestroyed() && win.webContents) {
+          logger.info(`[IPC] Checking window ${type} - webContents ID: ${win.webContents.id}`);
+          if (win.webContents.id === webContents.id || (!webContents && type === 'llmResponse')) {
+            try {
+              if (typeof win.blur === 'function') win.blur();
+            } catch (_) { }
+            win.hide();
+            logger.info('[IPC] close-window: hid window completely', { type });
+            hideCount++;
+
+            // If the user explicitly closed the LLM window, don't let incoming API calls resuscitate it
+            if (type === 'llmResponse') {
+              windowManager.llmUserHidden = true;
+            }
+          }
         }
       }
+
+      if (hideCount === 0) {
+        logger.warn('[IPC] close-window: no match found, attempting to hide llmResponse unconditionally');
+        const llmWin = windowManager.windows.get('llmResponse');
+        if (llmWin && !llmWin.isDestroyed()) {
+          try {
+            if (typeof llmWin.blur === 'function') llmWin.blur();
+          } catch (_) { }
+          llmWin.hide();
+          windowManager.llmUserHidden = true;
+        }
+      }
+
       return { success: true };
     });
 
-    // Move the LLM response window (different from move-window which targets main)
+    // Move the LLM response window
     ipcMain.handle("move-llm-window", (event, { deltaX, deltaY }) => {
-      const llmWindow = windowManager.getWindow('llmResponse');
-      if (llmWindow && !llmWindow.isDestroyed()) {
-        const [currentX, currentY] = llmWindow.getPosition();
-        llmWindow.setPosition(currentX + Math.round(deltaX), currentY + Math.round(deltaY));
+      // If bound to main window, moving one moves both
+      if (windowManager.bindWindows) {
+        windowManager.moveBoundWindows(deltaX, deltaY);
+      } else {
+        const llmWindow = windowManager.getWindow('llmResponse');
+        if (llmWindow && !llmWindow.isDestroyed()) {
+          const [currentX, currentY] = llmWindow.getPosition();
+          llmWindow.setPosition(currentX + Math.round(deltaX), currentY + Math.round(deltaY));
+        }
       }
       return { success: true };
     });
@@ -1542,6 +1590,11 @@ class ApplicationController {
             skill: this.activeSkill
           }
         });
+
+        // Catastrophic failure: hide the Analyzing overlay so it doesn't spin forever
+        if (this.shouldShowVoiceOverlay()) {
+          windowManager.hideLLMResponse();
+        }
       }
     }
   }

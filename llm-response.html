@@ -408,12 +408,11 @@
         /* Draggable header bar */
         .window-header {
             position: absolute;
-            top: 0;
+            top: 7px;
             left: 0;
             right: 0;
             height: 32px;
-            -webkit-app-region: no-drag;
-            /* IPC drag replaces native drag (broken with focusable:false) */
+            -webkit-app-region: drag;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -451,9 +450,15 @@
             color: #e5e7eb;
             border: 1px solid rgba(255, 255, 255, 0.12);
             cursor: pointer;
+            pointer-events: auto;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
             font-weight: 600;
             line-height: 1;
+        }
+
+        .window-header,
+        .window-controls {
+            pointer-events: auto;
         }
 
         .window-btn:hover {
@@ -470,13 +475,13 @@
         /* Push content below header */
         .has-header #response-content,
         .has-header #loading {
-            margin-top: 32px;
+            margin-top: 39px;
         }
 
         .has-header .split-layout,
         .has-header .full-content,
         .has-header .loading {
-            height: calc(100vh - 32px);
+            height: calc(100vh - 39px);
         }
 
         .copy-btn {
@@ -1109,57 +1114,26 @@
         // Close button handler
         (function () {
             const btn = document.getElementById('close-window-btn');
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    try {
-                        if (window.electronAPI && window.electronAPI.closeWindow) {
-                            window.electronAPI.closeWindow();
-                        } else if (window.api && window.api.send) {
-                            window.api.send('quit-app');
-                        } else {
-                            window.close();
-                        }
-                    } catch (e2) {
-                        try { window.close(); } catch (_) { }
+            if (!btn) return;
+
+            const performClose = async () => {
+                try {
+                    if (window.electronAPI && window.electronAPI.closeWindow) {
+                        await window.electronAPI.closeWindow();
+                    } else if (window.api && window.api.send) {
+                        window.api.send('quit-app');
+                    } else {
+                        window.close();
                     }
-                });
-            }
-        })();
-
-        // IPC-based drag for the header bar.
-        // focusable:false breaks -webkit-app-region:drag, so we implement
-        // drag manually: on mousedown inside the header (but NOT on buttons),
-        // send repeated moveLlmWindow IPC calls as the mouse moves.
-        (function () {
-            const header = document.querySelector('.window-header');
-            if (!header || !window.electronAPI || !window.electronAPI.moveLlmWindow) return;
-
-            let dragging = false;
-            let lastX = 0, lastY = 0;
-
-            header.addEventListener('mousedown', (e) => {
-                // Ignore clicks on control buttons
-                if (e.target.closest('.window-controls')) return;
-                dragging = true;
-                lastX = e.screenX;
-                lastY = e.screenY;
-                e.preventDefault();
-            });
-
-            document.addEventListener('mousemove', (e) => {
-                if (!dragging) return;
-                const deltaX = e.screenX - lastX;
-                const deltaY = e.screenY - lastY;
-                lastX = e.screenX;
-                lastY = e.screenY;
-                if (deltaX !== 0 || deltaY !== 0) {
-                    window.electronAPI.moveLlmWindow(deltaX, deltaY).catch(() => { });
+                } catch (e2) {
+                    try { window.close(); } catch (_) { }
                 }
-            });
+            };
 
-            document.addEventListener('mouseup', () => {
-                dragging = false;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                performClose();
             });
         })();
     </script>
