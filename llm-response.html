@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,14 +8,29 @@
     <script src="lib/markdown.js"></script>
     <script src="lib/mathrender.js"></script>
     <style>
-        .text-white { color: white; }
-        .text-gray-300 { color: #d1d5db; }
-        .text-sm { font-size: 0.875rem; }
-        .font-medium { font-weight: 500; }
-        .mr-2 { margin-right: 0.5rem; }
+        .text-white {
+            color: white;
+        }
+
+        .text-gray-300 {
+            color: #d1d5db;
+        }
+
+        .text-sm {
+            font-size: 0.875rem;
+        }
+
+        .font-medium {
+            font-weight: 500;
+        }
+
+        .mr-2 {
+            margin-right: 0.5rem;
+        }
 
         body {
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(20, 20, 20, 0.5) 100%);;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(20, 20, 20, 0.5) 100%);
+            ;
             -webkit-app-region: no-drag;
             color: white;
             margin: 0;
@@ -23,46 +39,80 @@
             height: 100vh;
             width: 100vw;
         }
+
         .content-area {
             -webkit-app-region: no-drag;
         }
+
         .markdown-content {
             line-height: 1.6;
             color: white;
             font-size: 0.875rem;
         }
-        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3 {
             margin-top: 1.2rem;
             margin-bottom: 0.8rem;
             font-weight: bold;
             color: white;
         }
-        .markdown-content h1 { font-size: 1.2rem; }
-        .markdown-content h2 { font-size: 1.1rem; }
-        .markdown-content h3 { font-size: 1rem; }
-        .markdown-content p { margin-bottom: 0.8rem; color: white; font-size: 0.875rem; }
-        .markdown-content ul, .markdown-content ol { margin-bottom: 0.8rem; padding-left: 1.2rem; font-size: 0.875rem; }
-        .markdown-content li { margin-bottom: 0.4rem; color: white; font-size: 0.875rem; }
-        .markdown-content code { 
-            background-color: rgba(0, 0, 0, 0.4); 
-            padding: 0.2rem 0.4rem; 
-            border-radius: 0.25rem; 
+
+        .markdown-content h1 {
+            font-size: 1.2rem;
+        }
+
+        .markdown-content h2 {
+            font-size: 1.1rem;
+        }
+
+        .markdown-content h3 {
+            font-size: 1rem;
+        }
+
+        .markdown-content p {
+            margin-bottom: 0.8rem;
+            color: white;
+            font-size: 0.875rem;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-bottom: 0.8rem;
+            padding-left: 1.2rem;
+            font-size: 0.875rem;
+        }
+
+        .markdown-content li {
+            margin-bottom: 0.4rem;
+            color: white;
+            font-size: 0.875rem;
+        }
+
+        .markdown-content code {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
             font-family: 'Courier New', monospace;
             color: #e5e7eb;
         }
-        .markdown-content pre { 
-            background-color: rgba(0, 0, 0, 0.4); 
-            padding: 1rem; 
-            border-radius: 0.5rem; 
+
+        .markdown-content pre {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 0.5rem;
             margin: 1rem 0;
             overflow-x: auto;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .markdown-content pre code { 
-            background-color: transparent; 
-            padding: 0; 
+
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
             color: #e5e7eb;
         }
+
         .markdown-content blockquote {
             border-left: 4px solid #6b7280;
             padding-left: 1rem;
@@ -70,11 +120,14 @@
             font-style: italic;
             color: #d1d5db;
         }
+
         .math {
             font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Georgia, serif;
             white-space: nowrap;
         }
-        .markdown-content sup, .markdown-content sub {
+
+        .markdown-content sup,
+        .markdown-content sub {
             font-size: 0.72em;
             line-height: 0;
         }
@@ -100,11 +153,13 @@
         }
 
         /* Panel improvements with proper scrolling */
-        .text-panel, .code-panel {
+        .text-panel,
+        .code-panel {
             background: transparent;
             overflow: hidden;
             position: relative;
-            min-height: 0; /* Important for grid items */
+            min-height: 0;
+            /* Important for grid items */
         }
 
         .panel-content {
@@ -139,15 +194,15 @@
         }
 
         /* Hide scrollbars completely while maintaining scrollability */
-        .panel-content::-webkit-scrollbar, 
+        .panel-content::-webkit-scrollbar,
         .full-content-inner::-webkit-scrollbar {
             width: 0px;
             height: 0px;
             display: none;
         }
-        
+
         /* For Firefox and other browsers */
-        .panel-content, 
+        .panel-content,
         .full-content-inner {
             scrollbar-width: none;
             -ms-overflow-style: none;
@@ -155,11 +210,12 @@
 
         /* Code block styling */
         .code-block {
-            background-color: rgba(0, 0, 0, 0.3); 
+            background-color: rgba(0, 0, 0, 0.3);
             margin-bottom: 1rem;
             border-radius: 0.5rem;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
         .code-header {
             background-color: rgba(0, 0, 0, 0.4);
             padding: 0.5rem 0.75rem;
@@ -169,22 +225,26 @@
             color: #d1d5db;
             font-weight: bold;
         }
+
         .code-content {
             padding: 1rem;
             overflow-x: auto;
             background-color: rgba(0, 0, 0, 0.2);
             border-radius: 0 0 0.5rem 0.5rem;
         }
+
         .code-content pre {
             background-color: transparent;
             border: none;
             margin: 0;
             padding: 0;
         }
+
         .code-content code {
             background-color: transparent;
             color: #e5e7eb;
         }
+
         .no-code {
             display: flex;
             align-items: center;
@@ -203,7 +263,7 @@
             background-color: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(8px);
         }
-        
+
         .loading-compact {
             display: flex;
             align-items: center;
@@ -212,13 +272,13 @@
             height: 60px;
             background: transparent;
         }
-        
+
         .dots-container {
             display: inline-flex;
             align-items: center;
             gap: 0.3rem;
         }
-        
+
         .bouncing-dot {
             width: 8px;
             height: 8px;
@@ -226,16 +286,28 @@
             background-color: #4CAF50;
             animation: bounce 1.4s infinite ease-in-out;
         }
-        
-        .bouncing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .bouncing-dot:nth-child(2) { animation-delay: -0.16s; }
-        .bouncing-dot:nth-child(3) { animation-delay: 0s; }
-        
+
+        .bouncing-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .bouncing-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        .bouncing-dot:nth-child(3) {
+            animation-delay: 0s;
+        }
+
         @keyframes bounce {
-            0%, 80%, 100% {
+
+            0%,
+            80%,
+            100% {
                 transform: scale(0);
                 opacity: 0.5;
             }
+
             40% {
                 transform: scale(1);
                 opacity: 1;
@@ -262,11 +334,11 @@
         .token.cdata {
             color: #6a737d;
         }
-        
+
         .token.punctuation {
             color: #e1e4e8;
         }
-        
+
         .token.property,
         .token.tag,
         .token.boolean,
@@ -276,7 +348,7 @@
         .token.deleted {
             color: #79b8ff;
         }
-        
+
         .token.selector,
         .token.attr-name,
         .token.string,
@@ -285,7 +357,7 @@
         .token.inserted {
             color: #85e89d;
         }
-        
+
         .token.operator,
         .token.entity,
         .token.url,
@@ -293,40 +365,45 @@
         .style .token.string {
             color: #f97583;
         }
-        
+
         .token.atrule,
         .token.attr-value,
         .token.keyword {
             color: #f97583;
         }
-        
+
         .token.function,
         .token.class-name {
             color: #b392f0;
         }
-        
+
         .token.regex,
         .token.important,
         .token.variable {
             color: #ffab70;
         }
-        
+
         .token.important,
         .token.bold {
             font-weight: bold;
         }
-        
+
         .token.italic {
             font-style: italic;
         }
-        
+
         .token.entity {
             cursor: help;
         }
 
         /* Ensure content is always visible */
-        .hidden { display: none !important; }
-        .visible { display: block !important; }
+        .hidden {
+            display: none !important;
+        }
+
+        .visible {
+            display: block !important;
+        }
 
         /* Draggable header bar */
         .window-header {
@@ -335,30 +412,34 @@
             left: 0;
             right: 0;
             height: 32px;
-            -webkit-app-region: drag;
+            -webkit-app-region: no-drag;
+            /* IPC drag replaces native drag (broken with focusable:false) */
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 10px;
             box-sizing: border-box;
-            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.04) 100%);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255,255,255,0.12);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
             z-index: 50;
             color: #e5e7eb;
             font-size: 12px;
             letter-spacing: 0.3px;
         }
+
         .window-title {
             pointer-events: none;
             user-select: none;
             opacity: 0.9;
         }
+
         .window-controls {
             display: flex;
             gap: 6px;
             -webkit-app-region: no-drag;
         }
+
         .window-btn {
             width: 22px;
             height: 22px;
@@ -366,64 +447,72 @@
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            background: rgba(255,255,255,0.06);
+            background: rgba(255, 255, 255, 0.06);
             color: #e5e7eb;
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             cursor: pointer;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
             font-weight: 600;
             line-height: 1;
         }
+
         .window-btn:hover {
-            background: rgba(255,255,255,0.12);
-            border-color: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
         }
+
         .window-btn-close:hover {
             background: rgba(239, 68, 68, 0.25);
             border-color: rgba(239, 68, 68, 0.45);
             color: #fff;
         }
-        
+
         /* Push content below header */
         .has-header #response-content,
         .has-header #loading {
             margin-top: 32px;
         }
+
         .has-header .split-layout,
         .has-header .full-content,
         .has-header .loading {
             height: calc(100vh - 32px);
         }
 
-        .copy-btn { 
-            position: absolute; 
-            top: 6px; 
-            right: 6px; 
-            background: rgba(0,0,0,0.5); 
-            color: rgba(255,255,255,0.9); 
-            border: 1px solid rgba(255,255,255,0.2); 
-            padding: 4px 8px; 
-            font-size: 11px; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            -webkit-app-region: no-drag; 
+        .copy-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.5);
+            color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            -webkit-app-region: no-drag;
             transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
         }
-        .copy-btn:hover { background: rgba(0,0,0,0.7); }
-        .copy-btn.copied { 
-            background: rgba(76,175,80,0.85); 
-            border-color: rgba(76,175,80,0.95); 
+
+        .copy-btn:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .copy-btn.copied {
+            background: rgba(76, 175, 80, 0.85);
+            border-color: rgba(76, 175, 80, 0.95);
             transform: scale(0.98);
         }
     </style>
 </head>
+
 <body class="text-white">
     <div class="main-container has-header">
         <!-- Draggable Header -->
         <div class="window-header">
             <div class="window-title">AI Response</div>
             <div class="window-controls">
-                <button id="close-window-btn" class="window-btn window-btn-close" title="Close">×</button>
+                <button id="close-window-btn" class="window-btn window-btn-close" aria-label="Close">×</button>
             </div>
         </div>
 
@@ -475,36 +564,36 @@
         let isInteractive = false;
         let scrollableElements = [];
         let initialized = false;
-        
+
         // Immediate logging to verify script execution
         console.log('[LLM-RESPONSE] Script tag executed');
-        
-        window.onerror = function(msg, url, line, col, error) {
+
+        window.onerror = function (msg, url, line, col, error) {
             console.error('[LLM-RESPONSE] Window error:', msg, 'at line', line);
             return false;
         };
-        
-        document.addEventListener('DOMContentLoaded', function() {
+
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('[LLM-RESPONSE] DOMContentLoaded fired');
             initLLMResponseWindow();
         });
-        
+
         // Also try immediate init in case DOMContentLoaded already fired
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             console.log('[LLM-RESPONSE] Document already ready, initializing now');
             setTimeout(initLLMResponseWindow, 0);
         }
-        
+
         function initLLMResponseWindow() {
             if (initialized) return;
             initialized = true;
-            
+
             console.log('[LLM-RESPONSE] Initializing window...');
 
             // Prefer marked when available, but fall back to the bundled markdown.js parser.
             if (typeof marked !== 'undefined') {
                 marked.setOptions({
-                    highlight: function(code, lang) {
+                    highlight: function (code, lang) {
                         if (typeof Prism !== 'undefined' && Prism.languages[lang]) {
                             return Prism.highlight(code, Prism.languages[lang], lang);
                         }
@@ -522,22 +611,22 @@
 
             console.log('[LLM-RESPONSE] electronAPI exists:', !!window.electronAPI);
             console.log('[LLM-RESPONSE] onDisplayLlmResponse method:', typeof window.electronAPI?.onDisplayLlmResponse);
-            
+
             // Set up event listeners using electronAPI from preload script
             if (window.electronAPI) {
                 console.log('[LLM-RESPONSE] Setting up IPC listeners...');
-                
+
                 // Set up show-loading event listener
                 window.electronAPI.onShowLoading(() => {
                     console.log('[LLM-RESPONSE] show-loading received');
                     showLoadingState();
                 });
-                
+
                 // Listen for LLM response
-                window.electronAPI.onDisplayLlmResponse(function() {
+                window.electronAPI.onDisplayLlmResponse(function () {
                     console.log('[LLM-RESPONSE] ===== display-llm-response received! =====');
                     console.log('[LLM-RESPONSE] arguments count:', arguments.length);
-                    
+
                     try {
                         // Get the data - could be first or second argument
                         let actualData = null;
@@ -546,18 +635,18 @@
                         } else if (arguments.length >= 1 && arguments[0] && typeof arguments[0] === 'object') {
                             actualData = arguments[0];
                         }
-                        
+
                         console.log('[LLM-RESPONSE] actualData keys:', actualData ? Object.keys(actualData) : 'null');
-                        
+
                         const response = actualData?.content || actualData?.response;
                         console.log('[LLM-RESPONSE] response found:', !!response, 'length:', response?.length);
-                        
+
                         if (!response) {
                             console.error('[LLM-RESPONSE] No response content found!');
                             hideLoadingState();
                             return;
                         }
-                        
+
                         hideLoadingState();
                         displayResponse(actualData);
                         setupScrolling();
@@ -568,7 +657,7 @@
                         hideLoadingState();
                     }
                 });
-                
+
                 console.log('[LLM-RESPONSE] IPC listeners set up successfully');
             } else {
                 console.error('[LLM-RESPONSE] electronAPI not available!');
@@ -578,16 +667,16 @@
         function showLoadingState() {
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
-            
+
             if (loadingElement) {
                 loadingElement.classList.remove('hidden');
                 loadingElement.style.display = ''; // Remove any forced display styles
             }
-            
+
             if (responseElement) {
                 responseElement.classList.add('hidden');
             }
-            
+
             console.log('Loading state shown - should see Analyzing...');
         }
 
@@ -617,18 +706,18 @@
         function calculateContentMetrics(response, codeBlocks) {
             // Count lines in the response
             const lineCount = response.split('\n').length;
-            
+
             // Check for long lines (over 80 characters)
             const hasLongLines = response.split('\n').some(line => line.length > 80);
-            
+
             // Count code blocks
             const codeBlockCount = codeBlocks.length;
-            
+
             // Estimate content complexity
             const hasCode = codeBlockCount > 0;
             const isLongContent = lineCount > 30;
             const hasMultipleCodeBlocks = codeBlockCount > 2;
-            
+
             return {
                 lineCount,
                 hasLongLines,
@@ -643,14 +732,14 @@
         function displayResponse(data) {
             // Show content
             const responseElement = document.getElementById('response-content');
-            
+
             if (responseElement) {
                 responseElement.classList.remove('hidden');
             }
 
             // Parse the response - check both content and response properties for compatibility
             const response = data.content || data.response;
-            
+
             if (!response) {
                 console.error('No response data received', {
                     dataKeys: Object.keys(data),
@@ -659,7 +748,7 @@
                 });
                 return;
             }
-            
+
             // Check if response contains code blocks
             const codeBlocks = extractCodeBlocks(response);
             hasCode = codeBlocks.length > 0;
@@ -674,7 +763,7 @@
                 // Full layout: all content in one panel
                 displayFullLayout(response);
             }
-            
+
             // Request dynamic window sizing based on content
             setTimeout(() => {
                 window.electronAPI.resizeLlmWindowForContent(contentMetrics)
@@ -718,14 +807,14 @@
                 if (element) {
                     // Enable mouse/trackpad scrolling with smooth behavior
                     element.style.scrollBehavior = 'smooth';
-                    
+
                     // Add mouse enter handler to ensure focus for scrolling
                     element.addEventListener('mouseenter', handleMouseEnter, { passive: true });
                     element.addEventListener('mouseleave', handleMouseLeave, { passive: true });
-                    
+
                     // Add wheel event for enhanced scrolling
                     element.addEventListener('wheel', handleWheelScroll, { passive: false });
-                    
+
                 }
             });
         }
@@ -922,10 +1011,10 @@
         // Add keyboard scrolling support for when interactive
         document.addEventListener('keydown', (e) => {
             if (!isInteractive) return;
-            
+
             const activeElement = document.activeElement;
             let targetElement = null;
-            
+
             // Find the currently focused scrollable element
             for (let element of scrollableElements) {
                 if (element === activeElement || element.contains(activeElement)) {
@@ -933,17 +1022,17 @@
                     break;
                 }
             }
-            
+
             // Default to first scrollable element if none focused
             if (!targetElement && scrollableElements.length > 0) {
                 targetElement = scrollableElements[0];
             }
-            
+
             if (!targetElement) return;
-            
+
             const scrollAmount = 50; // Pixels to scroll
-            
-            switch(e.key) {
+
+            switch (e.key) {
                 case 'ArrowUp':
                     e.preventDefault();
                     targetElement.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
@@ -983,16 +1072,16 @@
         function verifyDisplayState() {
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
-            
+
             const isLoadingHidden = loadingElement ? loadingElement.classList.contains('hidden') : true;
             const isContentVisible = responseElement ? !responseElement.classList.contains('hidden') : false;
-            
+
             console.log('Display state verification:', {
                 loadingHidden: isLoadingHidden,
                 contentVisible: isContentVisible,
                 windowVisible: !document.hidden
             });
-            
+
             if (!isLoadingHidden || !isContentVisible) {
                 console.warn('Display state inconsistent - forcing correction');
                 if (loadingElement) {
@@ -1006,22 +1095,23 @@
         }
 
         // Add global debugging function
-        window.debugLLMWindow = function() {
+        window.debugLLMWindow = function () {
             console.log('=== LLM Window Debug Info ===');
             console.log('Current layout:', currentLayout);
             console.log('Has code:', hasCode);
             console.log('Is interactive:', isInteractive);
             console.log('Scrollable elements:', scrollableElements.length);
-            
+
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
         };
 
         // Close button handler
-        (function(){
+        (function () {
             const btn = document.getElementById('close-window-btn');
             if (btn) {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     try {
                         if (window.electronAPI && window.electronAPI.closeWindow) {
                             window.electronAPI.closeWindow();
@@ -1030,12 +1120,49 @@
                         } else {
                             window.close();
                         }
-                    } catch (e) {
-                        try { window.close(); } catch (_) {}
+                    } catch (e2) {
+                        try { window.close(); } catch (_) { }
                     }
                 });
             }
         })();
+
+        // IPC-based drag for the header bar.
+        // focusable:false breaks -webkit-app-region:drag, so we implement
+        // drag manually: on mousedown inside the header (but NOT on buttons),
+        // send repeated move-window IPC calls as the mouse moves.
+        (function () {
+            const header = document.querySelector('.window-header');
+            if (!header || !window.electronAPI || !window.electronAPI.moveWindow) return;
+
+            let dragging = false;
+            let lastX = 0, lastY = 0;
+
+            header.addEventListener('mousedown', (e) => {
+                // Ignore clicks on control buttons
+                if (e.target.closest('.window-controls')) return;
+                dragging = true;
+                lastX = e.screenX;
+                lastY = e.screenY;
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const deltaX = e.screenX - lastX;
+                const deltaY = e.screenY - lastY;
+                lastX = e.screenX;
+                lastY = e.screenY;
+                if (deltaX !== 0 || deltaY !== 0) {
+                    window.electronAPI.moveWindow(deltaX, deltaY).catch(() => { });
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                dragging = false;
+            });
+        })();
     </script>
 </body>
+
 </html>
