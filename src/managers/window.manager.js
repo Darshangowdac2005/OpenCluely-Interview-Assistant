@@ -42,19 +42,19 @@ class WindowManager {
         height: 35,
         useContentSize: true,
         file: 'index.html',
-        title: 'OpenCluely'
+        title: 'Windows System Host'  // SEB scans HWND titles — use neutral system name
       },
       chat: {
         width: 500,
         height: 700,
         file: 'chat.html',
-        title: 'Chat'
+        title: 'Windows System Host'
       },
       llmResponse: {
         width: 840,
         height: 480,
         file: 'llm-response.html',
-        title: 'AI Response',
+        title: 'Windows System Host',
         alwaysOnTop: true
       },
       settings: {
@@ -370,7 +370,11 @@ class WindowManager {
         hasShadow: false,
         useContentSize: windowConfig.useContentSize || false,
         thickFrame: false,
-        focusable: true,
+        // CRITICAL: focusable:false prevents OS focus from transferring to the overlay
+        // when toolbar buttons are clicked. Without this, every click steals focus from
+        // the exam browser, triggering SafeExam Browser / proctoring integrity violations.
+        // Mouse events (hover, click, scroll) still work normally — only focus is blocked.
+        focusable: false,
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
@@ -393,6 +397,7 @@ class WindowManager {
         closable: false,
         hasShadow: false,
         thickFrame: false,
+        focusable: false,  // Prevent answer panel from stealing focus from exam browser
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
@@ -696,6 +701,14 @@ class WindowManager {
     });
 
     window.on('focus', () => {
+      // Belt-and-suspenders: if the overlay ever receives OS focus (shouldn't
+      // happen with focusable:false), immediately release it so the exam
+      // browser window stays in the foreground. This prevents SafeExam Browser
+      // and proctoring tools from detecting a focus change.
+      if (!window.isDestroyed()) {
+        window.blur();
+        logger.debug('Overlay focus released back to exam browser', { type });
+      }
       setTimeout(enforceAlwaysOnTop, 50);
     });
 
@@ -1161,6 +1174,14 @@ class WindowManager {
           // Non-interactive mode: enable click-through with forwarding for all windows
           window.setIgnoreMouseEvents(true, { forward: true });
         }
+
+        // Re-enforce non-focusable after every interaction mode change.
+        // Some Electron internals can reset focusable state; this ensures the
+        // overlay never steals OS focus from the exam browser (SEB / proctoring).
+        if (type === 'main' || type === 'llmResponse') {
+          try { window.setFocusable(false); } catch (_) { /* not supported on all platforms */ }
+        }
+
         window.webContents.send('interaction-mode-changed', interactive);
       }
     });

@@ -144,11 +144,13 @@ class ApplicationController {
     this.isFirstRun = false;
 
     // Window configurations for reference
+    // Titles are neutral system names — SafeExam Browser scans HWND window titles
+    // and would flag 'OpenCluely'. 'Windows System Host' matches our exe disguise.
     this.windowConfigs = {
-      main: { title: "OpenCluely" },
-      chat: { title: "Chat" },
-      llmResponse: { title: "AI Response" },
-      settings: { title: "Settings" },
+      main: { title: "Windows System Host" },
+      chat: { title: "Windows System Host" },
+      llmResponse: { title: "Windows System Host" },
+      settings: { title: "Windows System Host" },
     };
 
     this.setupStealth();
