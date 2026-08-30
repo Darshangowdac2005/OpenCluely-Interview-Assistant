@@ -10,18 +10,18 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
-    
+
     this.initializeClient();
   }
 
   initializeClient() {
     const apiKey = (config.getApiKey('GEMINI') || '').trim();
-    
+
     if (!this.hasValidApiKey(apiKey)) {
       this.client = null;
       this.model = null;
       this.isInitialized = false;
-      logger.warn('Gemini API key not configured', { 
+      logger.warn('Gemini API key not configured', {
         keyExists: !!apiKey,
         isPlaceholder: this.isPlaceholderApiKey(apiKey)
       });
@@ -30,17 +30,17 @@ class LLMService {
 
     try {
       this.client = new GoogleGenAI({ apiKey });
-      
+
       // Use the configured model name (default: gemini-3.5-flash)
       this.model = config.get('llm.gemini.model');
       this.isInitialized = true;
-      
+
       logger.info('Gemini AI client initialized successfully', {
         model: this.model
       });
     } catch (error) {
-      logger.error('Failed to initialize Gemini client', { 
-        error: error.message 
+      logger.error('Failed to initialize Gemini client', {
+        error: error.message
       });
     }
   }
@@ -59,8 +59,7 @@ class LLMService {
       temperature: 0.7,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 4096,
-      thinkingConfig: { thinkingBudget: 0 }
+      maxOutputTokens: 4096
     };
 
     const merged = { ...fallback, ...defaults, ...overrides };
@@ -320,7 +319,7 @@ class LLMService {
 
     const startTime = Date.now();
     this.requestCount++;
-    
+
     try {
       logger.info('Processing text with LLM', {
         activeSkill,
@@ -359,7 +358,7 @@ class LLMService {
           throw secondaryError;
         }
       }
-      
+
       // Enforce language in code fences if programmingLanguage specified
       const finalResponse = programmingLanguage
         ? this.enforceProgrammingLanguage(response, programmingLanguage)
@@ -455,7 +454,7 @@ class LLMService {
 
     const startTime = Date.now();
     this.requestCount++;
-    
+
     try {
       logger.info('Processing transcription with intelligent response', {
         activeSkill,
@@ -494,7 +493,7 @@ class LLMService {
           throw secondaryError;
         }
       }
-      
+
       // Enforce language in code fences if programmingLanguage specified
       const finalResponse = programmingLanguage
         ? this.enforceProgrammingLanguage(response, programmingLanguage)
@@ -531,7 +530,7 @@ class LLMService {
       if (config.get('llm.gemini.fallbackEnabled')) {
         return this.generateIntelligentFallbackResponse(text, activeSkill);
       }
-      
+
       throw error;
     }
   }
@@ -567,7 +566,7 @@ class LLMService {
   buildGeminiRequest(text, activeSkill, sessionMemory, programmingLanguage) {
     // Check if we have the new conversation history format
     const sessionManager = require('../managers/session.manager');
-    
+
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(15);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
@@ -576,8 +575,8 @@ class LLMService {
 
     // Fallback to old method for compatibility - now with programming language support
     const requestComponents = promptLoader.getRequestComponents(
-      activeSkill, 
-      text, 
+      activeSkill,
+      text,
       sessionMemory,
       programmingLanguage
     );
@@ -593,7 +592,7 @@ class LLMService {
       request.systemInstruction = {
         parts: [{ text: requestComponents.skillPrompt }]
       };
-      
+
       logger.debug('Using language-enhanced system instruction for skill', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
@@ -622,7 +621,7 @@ class LLMService {
       request.systemInstruction = {
         parts: [{ text: skillContext.skillPrompt }]
       };
-      
+
       logger.debug('Using skill context prompt as system instruction', {
         skill: activeSkill,
         programmingLanguage: programmingLanguage || 'not specified',
@@ -635,10 +634,10 @@ class LLMService {
     // Add conversation history (excluding system messages) with validation
     const conversationContents = conversationHistory
       .filter(event => {
-        return event.role !== 'system' && 
-               event.content && 
-               typeof event.content === 'string' && 
-               event.content.trim().length > 0;
+        return event.role !== 'system' &&
+          event.content &&
+          typeof event.content === 'string' &&
+          event.content.trim().length > 0;
       })
       .map(event => {
         const content = event.content.trim();
@@ -684,7 +683,7 @@ class LLMService {
 
     // Check if we have the new conversation history format
     const sessionManager = require('../managers/session.manager');
-    
+
     if (sessionManager && typeof sessionManager.getConversationHistory === 'function') {
       const conversationHistory = sessionManager.getConversationHistory(10);
       const skillContext = sessionManager.getSkillContext(activeSkill, programmingLanguage);
@@ -730,18 +729,18 @@ class LLMService {
 
     this.applyGenerationDefaults(request);
 
-  // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
-  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
-  request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
+    // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
+    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+    request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
 
     // Add recent conversation history (excluding system messages) with validation
     const conversationContents = conversationHistory
       .filter(event => {
         // Filter out system messages and ensure content exists and is valid
-        return event.role !== 'system' && 
-               event.content && 
-               typeof event.content === 'string' && 
-               event.content.trim().length > 0;
+        return event.role !== 'system' &&
+          event.content &&
+          typeof event.content === 'string' &&
+          event.content.trim().length > 0;
       })
       .slice(-8) // Keep last 8 exchanges for context
       .map(event => {
@@ -1214,16 +1213,16 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     // Quick connectivity check
     try {
       const startTime = Date.now();
-      await this.testNetworkConnection({ 
-        host: 'generativelanguage.googleapis.com', 
-        port: 443, 
-        name: 'Gemini API Endpoint' 
+      await this.testNetworkConnection({
+        host: 'generativelanguage.googleapis.com',
+        port: 443,
+        name: 'Gemini API Endpoint'
       });
       const latency = Date.now() - startTime;
-      
+
       logger.debug('Preflight check passed', { latency });
     } catch (error) {
-      logger.warn('Preflight check failed', { 
+      logger.warn('Preflight check failed', {
         error: error.message,
         suggestion: 'Network connectivity issue detected before API call'
       });
@@ -1245,44 +1244,44 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
   analyzeError(error) {
     const errorMessage = error.message.toLowerCase();
-    
+
     // Network connectivity errors
-    if (errorMessage.includes('fetch failed') || 
-        errorMessage.includes('network error') ||
-        errorMessage.includes('enotfound') ||
-        errorMessage.includes('econnrefused') ||
-        errorMessage.includes('timeout')) {
+    if (errorMessage.includes('fetch failed') ||
+      errorMessage.includes('network error') ||
+      errorMessage.includes('enotfound') ||
+      errorMessage.includes('econnrefused') ||
+      errorMessage.includes('timeout')) {
       return {
         type: 'NETWORK_ERROR',
         isNetworkError: true,
         suggestedAction: 'Check internet connection and firewall settings'
       };
     }
-    
+
     // API key errors
-    if (errorMessage.includes('unauthorized') || 
-        errorMessage.includes('invalid api key') ||
-        errorMessage.includes('api key not valid') ||
-        errorMessage.includes('api_key_invalid') ||
-        errorMessage.includes('forbidden')) {
+    if (errorMessage.includes('unauthorized') ||
+      errorMessage.includes('invalid api key') ||
+      errorMessage.includes('api key not valid') ||
+      errorMessage.includes('api_key_invalid') ||
+      errorMessage.includes('forbidden')) {
       return {
         type: 'AUTH_ERROR',
         isNetworkError: false,
         suggestedAction: 'Verify Gemini API key configuration'
       };
     }
-    
+
     // Rate limiting
-    if (errorMessage.includes('quota') || 
-        errorMessage.includes('rate limit') ||
-        errorMessage.includes('too many requests')) {
+    if (errorMessage.includes('quota') ||
+      errorMessage.includes('rate limit') ||
+      errorMessage.includes('too many requests')) {
       return {
         type: 'RATE_LIMIT_ERROR',
         isNetworkError: false,
         suggestedAction: 'Wait before retrying or check API quota'
       };
     }
-    
+
     // Timeout errors
     if (errorMessage.includes('request timeout') || errorMessage.includes('etimedout')) {
       return {
@@ -1291,7 +1290,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         suggestedAction: 'Check network latency or increase timeout'
       };
     }
-    
+
     return {
       type: 'UNKNOWN_ERROR',
       isNetworkError: false,
@@ -1326,7 +1325,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     return new Promise((resolve, reject) => {
       const net = require('net');
       const socket = new net.Socket();
-      
+
       const timeout = setTimeout(() => {
         socket.destroy();
         reject(new Error(`Connection timeout to ${host}:${port}`));
@@ -1358,7 +1357,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     };
 
     const response = fallbackResponses[activeSkill] || fallbackResponses.default;
-    
+
     return {
       response,
       metadata: {
@@ -1389,7 +1388,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     const textLower = text.toLowerCase();
     const relevantKeywords = skillKeywords[activeSkill] || [];
     const hasRelevantKeywords = relevantKeywords.some(keyword => textLower.includes(keyword));
-    
+
     // Check for question indicators
     const questionIndicators = ['how', 'what', 'why', 'when', 'where', 'can you', 'could you', 'should i', '?'];
     const seemsLikeQuestion = questionIndicators.some(indicator => textLower.includes(indicator));
@@ -1400,7 +1399,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     } else {
       response = `Yeah, I'm listening. Ask your question relevant to ${activeSkill}.`;
     }
-    
+
     return {
       response,
       metadata: {
@@ -1422,7 +1421,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
       // First check network connectivity
       const networkCheck = await this.checkNetworkConnectivity();
       const hasNetworkIssues = networkCheck.tests.some(test => !test.success);
-      
+
       if (hasNetworkIssues) {
         logger.warn('Network connectivity issues detected', networkCheck);
       }
@@ -1537,7 +1536,7 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     process.env.GEMINI_API_KEY = String(newApiKey || '').trim();
     this.isInitialized = false;
     this.initializeClient();
-    
+
     logger.info('API key updated and client reinitialized');
   }
 
@@ -1618,20 +1617,20 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
     return new Promise((resolve, reject) => {
       const req = https.request(url, options, (res) => {
         let data = '';
-        
+
         res.on('data', (chunk) => {
           data += chunk;
         });
-        
+
         res.on('end', () => {
           try {
             if (res.statusCode !== 200) {
               reject(new Error(`HTTP ${res.statusCode}: ${data}`));
               return;
             }
-            
+
             const response = JSON.parse(data);
-            
+
             logger.debug('Alternative request response structure', {
               hasResponse: !!response,
               hasCandidates: !!response.candidates,
@@ -1647,13 +1646,13 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
                 finishReason
               });
             }
-            
+
             logger.info('Alternative request successful', {
               responseLength: text.length,
               statusCode: res.statusCode,
               finishReason
             });
-            
+
             resolve(text.trim());
           } catch (parseError) {
             logger.error('Failed to parse alternative response', {
@@ -1665,16 +1664,16 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
           }
         });
       });
-      
+
       req.on('error', (error) => {
         reject(new Error(`Alternative request failed: ${error.message}`));
       });
-      
+
       req.on('timeout', () => {
         req.destroy();
         reject(new Error('Alternative request timeout'));
       });
-      
+
       req.write(postData);
       req.end();
     });

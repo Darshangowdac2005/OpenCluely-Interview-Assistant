@@ -40,8 +40,8 @@ class ConfigManager {
 
       llm: {
         gemini: {
-          model: 'gemini-2.5-flash-lite',
-          fallbackModels: ['gemini-3.5-flash-lite', 'gemini-3.7-flash'],
+          model: 'gemini-3.5-flash-lite',
+          fallbackModels: ['gemini-3.7-flash', 'gemini-4.0-flash'],
           maxRetries: 3,
           timeout: 30000,
           fallbackEnabled: true,
@@ -50,8 +50,7 @@ class ConfigManager {
             temperature: 0.7,
             topK: 32,
             topP: 0.9,
-            maxOutputTokens: 4096,
-            thinkingConfig: { thinkingBudget: 0 }
+            maxOutputTokens: 4096
           }
         }
       },
