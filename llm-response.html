@@ -1130,10 +1130,10 @@
         // IPC-based drag for the header bar.
         // focusable:false breaks -webkit-app-region:drag, so we implement
         // drag manually: on mousedown inside the header (but NOT on buttons),
-        // send repeated move-window IPC calls as the mouse moves.
+        // send repeated moveLlmWindow IPC calls as the mouse moves.
         (function () {
             const header = document.querySelector('.window-header');
-            if (!header || !window.electronAPI || !window.electronAPI.moveWindow) return;
+            if (!header || !window.electronAPI || !window.electronAPI.moveLlmWindow) return;
 
             let dragging = false;
             let lastX = 0, lastY = 0;
@@ -1154,7 +1154,7 @@
                 lastX = e.screenX;
                 lastY = e.screenY;
                 if (deltaX !== 0 || deltaY !== 0) {
-                    window.electronAPI.moveWindow(deltaX, deltaY).catch(() => { });
+                    window.electronAPI.moveLlmWindow(deltaX, deltaY).catch(() => { });
                 }
             });
 

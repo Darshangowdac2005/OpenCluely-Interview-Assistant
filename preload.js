@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM window specific methods
   expandLlmWindow: (contentMetrics) => ipcRenderer.invoke('expand-llm-window', contentMetrics),
   resizeLlmWindowForContent: (contentMetrics) => ipcRenderer.invoke('resize-llm-window-for-content', contentMetrics),
+  moveLlmWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-llm-window', { deltaX, deltaY }),
 
   // Clipboard helper for reliable copy actions
   copyToClipboard: (text) => {

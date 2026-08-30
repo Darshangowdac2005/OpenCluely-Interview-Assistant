@@ -947,12 +947,24 @@ class ApplicationController {
 
     ipcMain.handle("close-window", (event) => {
       const webContents = event.sender;
-      const window = windowManager.windows.forEach((win, type) => {
-        if (win.webContents === webContents) {
+      // Use Array.from so we can find the matching window and hide it
+      for (const [type, win] of windowManager.windows) {
+        if (!win.isDestroyed() && win.webContents === webContents) {
           win.hide();
-          return true;
+          logger.debug('close-window: hid window', { type });
+          break;
         }
-      });
+      }
+      return { success: true };
+    });
+
+    // Move the LLM response window (different from move-window which targets main)
+    ipcMain.handle("move-llm-window", (event, { deltaX, deltaY }) => {
+      const llmWindow = windowManager.getWindow('llmResponse');
+      if (llmWindow && !llmWindow.isDestroyed()) {
+        const [currentX, currentY] = llmWindow.getPosition();
+        llmWindow.setPosition(currentX + Math.round(deltaX), currentY + Math.round(deltaY));
+      }
       return { success: true };
     });
 

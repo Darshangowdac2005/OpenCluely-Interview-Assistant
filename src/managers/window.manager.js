@@ -1167,17 +1167,19 @@ class WindowManager {
 
     this.windows.forEach((window, type) => {
       if (!window.isDestroyed()) {
-        if (interactive) {
-          // Interactive mode: allow mouse events for all windows
+        // Settings and onboarding windows must ALWAYS be clickable so the user
+        // can type in input fields (API key, etc.). Never make them click-through.
+        const isAlwaysInteractive = (type === 'settings' || type === 'onboarding');
+
+        if (isAlwaysInteractive) {
+          window.setIgnoreMouseEvents(false);
+        } else if (interactive) {
           window.setIgnoreMouseEvents(false);
         } else {
-          // Non-interactive mode: enable click-through with forwarding for all windows
           window.setIgnoreMouseEvents(true, { forward: true });
         }
 
         // Re-enforce non-focusable after every interaction mode change.
-        // Some Electron internals can reset focusable state; this ensures the
-        // overlay never steals OS focus from the exam browser (SEB / proctoring).
         if (type === 'main' || type === 'llmResponse') {
           try { window.setFocusable(false); } catch (_) { /* not supported on all platforms */ }
         }
