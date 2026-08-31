@@ -506,6 +506,15 @@ class MainWindowUI {
     }
 
     setupEventListeners() {
+        // Prevent default mousedown to stop focus stealing, except for inputs and links.
+        // This is crucial for avoiding proctoring software detecting a focus loss when clicking toolbar elements.
+        document.addEventListener('mousedown', (e) => {
+            const tag = e.target && e.target.tagName;
+            if (tag !== 'INPUT' && tag !== 'A') {
+                e.preventDefault();
+            }
+        });
+
         if (window.electronAPI) {
             // Fix interaction mode change listener
             window.electronAPI.onInteractionModeChanged((event, interactive) => {
