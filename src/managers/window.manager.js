@@ -285,7 +285,7 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         backgroundThrottling: false,
-        devTools: true, // Enable DevTools for debugging
+        devTools: process.env.NODE_ENV === 'development', // Only enable DevTools in dev mode — production builds must NOT have this or DevTools spawns a visible taskbar icon
       },
       show: false, // Never show during creation, use showOnCurrentDesktop instead
       title: windowConfig.title,
@@ -293,6 +293,7 @@ class WindowManager {
       alwaysOnTop: true,
       visibleOnAllWorkspaces: true,
       fullscreenable: false,
+      type: process.platform === 'win32' ? 'toolbar' : undefined,
       // Platform-specific always-on-top settings
       // On macOS use 'floating'; on Windows use 'screen-saver' (HWND_TOPMOST)
       // so the overlay can render above exclusive fullscreen apps like
@@ -397,9 +398,9 @@ class WindowManager {
         closable: false,
         hasShadow: false,
         thickFrame: false,
-        // This is an ordinary interactive window: its close button and native
-        // drag region require normal OS pointer/focus handling.
-        focusable: true,
+        // Prevent answer panel from stealing focus from exam browser
+        // Also prevents Windows from forcing a taskbar icon despite skipTaskbar: true
+        focusable: false,
         ...(process.platform === 'darwin' && {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
