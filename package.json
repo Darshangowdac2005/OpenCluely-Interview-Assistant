@@ -1,6 +1,6 @@
 {
   "name": "opencluely",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
