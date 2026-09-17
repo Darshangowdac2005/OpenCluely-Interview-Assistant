@@ -73,6 +73,7 @@ or add Azure Speech credentials in Settings.
 | Cmd/Ctrl+Shift+S | Screenshot capture |
 | Alt+R | Toggle speech recognition |
 | Cmd/Ctrl+Shift+V | Toggle window visibility |
+| Cmd/Ctrl+Shift+X | Toggle AI response window |
 | Cmd/Ctrl+Shift+I / Alt+A | Toggle click-through interaction |
 | Cmd/Ctrl+Shift+C | Open chat |
 | Cmd/Ctrl+, | Open settings |

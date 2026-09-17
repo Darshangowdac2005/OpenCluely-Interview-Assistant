@@ -437,6 +437,9 @@
             display: flex;
             gap: 6px;
             -webkit-app-region: no-drag;
+            position: relative;
+            z-index: 51;
+            pointer-events: auto;
         }
 
         .window-btn {
@@ -451,6 +454,9 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             cursor: pointer;
             pointer-events: auto;
+            -webkit-app-region: no-drag;
+            position: relative;
+            z-index: 52;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
             font-weight: 600;
             line-height: 1;
@@ -517,7 +523,7 @@
         <div class="window-header">
             <div class="window-title">AI Response</div>
             <div class="window-controls">
-                <button id="close-window-btn" class="window-btn window-btn-close" aria-label="Close">×</button>
+                <button id="close-window-btn" class="window-btn window-btn-close" type="button" aria-label="Close" style="-webkit-app-region: no-drag;">×</button>
             </div>
         </div>
 
@@ -1115,10 +1121,16 @@
         (function () {
             const btn = document.getElementById('close-window-btn');
             if (!btn) return;
+            let closeRequested = false;
 
             const performClose = async () => {
+                if (closeRequested) return;
+                closeRequested = true;
+                btn.disabled = true;
                 try {
-                    if (window.electronAPI && window.electronAPI.closeWindow) {
+                    if (window.electronAPI && window.electronAPI.closeLlmResponse) {
+                        window.electronAPI.closeLlmResponse();
+                    } else if (window.electronAPI && window.electronAPI.closeWindow) {
                         await window.electronAPI.closeWindow();
                     } else if (window.api && window.api.send) {
                         window.api.send('quit-app');
@@ -1127,14 +1139,25 @@
                     }
                 } catch (e2) {
                     try { window.close(); } catch (_) { }
+                } finally {
+                    setTimeout(() => {
+                        closeRequested = false;
+                        btn.disabled = false;
+                    }, 500);
                 }
             };
 
-            btn.addEventListener('click', (e) => {
+            const handleCloseEvent = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 performClose();
-            });
+            };
+
+            // Pointer/mouse down handlers are needed because Chromium can
+            // route click release through the draggable header while loading.
+            btn.addEventListener('pointerdown', handleCloseEvent, true);
+            btn.addEventListener('mousedown', handleCloseEvent, true);
+            btn.addEventListener('click', handleCloseEvent, true);
         })();
     </script>
 </body>

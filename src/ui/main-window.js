@@ -22,6 +22,12 @@ class MainWindowUI {
         this._mediaStream = null;
         this._scriptNode = null;
         this._captureInterval = null;
+        // Guards to prevent double-fire / stuck state on rapid clicks.
+        // These must be reset on pointer interruption as well; otherwise a blocked or
+        // interrupted interaction can leave the toolbar locked in a non-responsive state.
+        this._skillChangePending = false;
+        this._micActionPending = false;
+        this._captureActionPending = false;
 
         // Define available skills for navigation
         this.availableSkills = [
@@ -31,6 +37,12 @@ class MainWindowUI {
         ];
 
         this.init();
+    }
+
+    resetToolbarActionLocks() {
+        this._skillChangePending = false;
+        this._micActionPending = false;
+        this._captureActionPending = false;
     }
 
     async init() {
@@ -275,9 +287,9 @@ class MainWindowUI {
         this.infoButton = document.getElementById('infoButton');
         this.shortcutsPopover = document.getElementById('shortcutsPopover');
 
-        // NEW: Screenshot button is the first .command-item without id
-        const commandItems = document.querySelectorAll('.command-item');
-        this.screenshotButton = commandItems && commandItems[0];
+        // Screenshot button: use id if present, otherwise fallback to first .command-item
+        this.screenshotButton = document.getElementById('captureButton') ||
+            Array.from(document.querySelectorAll('.command-item')).find(el => !el.id);
 
         if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
@@ -285,24 +297,42 @@ class MainWindowUI {
 
         // Screenshot click handler
         this.screenshotButton.addEventListener('click', () => {
-            if (this.isInteractive && window.electronAPI && window.electronAPI.takeScreenshot) {
-                window.electronAPI.takeScreenshot();
+            if (!this.isInteractive) return;
+            if (this._captureActionPending) return; // prevent double-fire
+            if (window.electronAPI && window.electronAPI.takeScreenshot) {
+                this._captureActionPending = true;
+                try {
+                    window.electronAPI.takeScreenshot();
+                } finally {
+                    setTimeout(() => { this._captureActionPending = false; }, 800);
+                }
             }
         });
+        this.screenshotButton.addEventListener('pointerup', () => this.resetToolbarActionLocks());
 
         // Skill indicator click handler — cycles to next skill
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
+            if (this._skillChangePending) return; // prevent rapid double-click
             const idx = this.availableSkills.indexOf(this.currentSkill);
             const nextSkill = this.availableSkills[(idx + 1) % this.availableSkills.length];
+            this._skillChangePending = true;
             if (window.electronAPI && window.electronAPI.updateActiveSkill) {
                 window.electronAPI.updateActiveSkill(nextSkill).then(() => {
                     this.handleSkillActivated(nextSkill);
+                }).catch(err => {
+                    logger.error('updateActiveSkill IPC failed', { error: err && err.message });
+                    // Still update UI so it doesn't appear stuck
+                    this.handleSkillActivated(nextSkill);
+                }).finally(() => {
+                    setTimeout(() => { this._skillChangePending = false; }, 400);
                 });
             } else {
                 this.handleSkillActivated(nextSkill);
+                setTimeout(() => { this._skillChangePending = false; }, 400);
             }
         });
+        this.skillIndicator.addEventListener('pointerup', () => this.resetToolbarActionLocks());
 
         // Check for required elements (settingsIndicator is optional)
         if (this.settingsIndicator) {
@@ -315,34 +345,57 @@ class MainWindowUI {
 
         // Add click handler for microphone
         this.micButton.addEventListener('click', async () => {
-            if (this.isInteractive && this.speechAvailable) {
-                try {
-                    if (this.isRecording) {
-                        await window.electronAPI.stopSpeechRecognition();
-                    } else {
-                        await window.electronAPI.startSpeechRecognition();
-                    }
-                } catch (error) {
-                    logger.error('Speech recognition toggle failed', {
-                        component: 'MainWindowUI',
-                        error: error.message
-                    });
-                    this.isRecording = false;
-                    this.updateMicButtonState();
-                }
-            } else if (this.isInteractive && !this.speechAvailable) {
+            if (!this.isInteractive) return;
+            if (this._micActionPending) return; // prevent double-fire while IPC in flight
+            // Always refresh speech availability before acting so stale state can't block
+            if (!this.speechAvailable) {
+                await this.loadSpeechAvailability();
+            }
+            if (!this.speechAvailable) {
                 logger.warn('Mic clicked but speech recognition is not available', {
                     component: 'MainWindowUI'
                 });
-                this.loadSpeechAvailability();
+                return;
+            }
+            this._micActionPending = true;
+            try {
+                if (this.isRecording) {
+                    await window.electronAPI.stopSpeechRecognition();
+                } else {
+                    await window.electronAPI.startSpeechRecognition();
+                }
+            } catch (error) {
+                logger.error('Speech recognition toggle failed', {
+                    component: 'MainWindowUI',
+                    error: error.message
+                });
+                this.isRecording = false;
+                this.updateMicButtonState();
+            } finally {
+                // Release lock after a short delay so rapid double-click is prevented
+                setTimeout(() => { this._micActionPending = false; }, 600);
             }
         });
+        this.micButton.addEventListener('pointerup', () => this.resetToolbarActionLocks());
 
         // Language cycler (replaces native <select>)
         this.languageCycler = document.getElementById('codingLanguage');
         this._languages = ['cpp', 'c', 'python', 'java', 'javascript'];
         this._languageLabels = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JS' };
         this._currentLangIndex = 0; // default C++
+
+        // Also handle clicks on the parent #languageSelector div (icon area)
+        const langSelectorDiv = document.getElementById('languageSelector');
+        if (langSelectorDiv) {
+            langSelectorDiv.addEventListener('click', (e) => {
+                // If click is on the cycler span itself it will be handled below;
+                // only handle clicks that land on the icon or container
+                if (e.target === this.languageCycler || e.target.closest('.lang-cycler')) return;
+                if (!this.isInteractive) return;
+                // Programmatically trigger the cycler
+                this.languageCycler && this.languageCycler.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+            });
+        }
 
         if (this.languageCycler) {
             // Load saved language
@@ -360,16 +413,22 @@ class MainWindowUI {
                 this._updateLanguageCycler();
             }
 
-            // Click cycles forward
+            // Click cycles forward — debounced to prevent stuck state on rapid clicks
+            let _langChangePending = false;
             this.languageCycler.addEventListener('click', () => {
                 if (!this.isInteractive) return;
+                if (_langChangePending) return;
+                _langChangePending = true;
                 this._currentLangIndex = (this._currentLangIndex + 1) % this._languages.length;
                 this._updateLanguageCycler();
                 const lang = this._languages[this._currentLangIndex];
                 if (window.electronAPI && window.electronAPI.saveSettings) {
-                    window.electronAPI.saveSettings({ codingLanguage: lang });
+                    window.electronAPI.saveSettings({ codingLanguage: lang }).catch(err => {
+                        logger.error('Failed to save coding language', { error: err && err.message });
+                    });
                 }
                 setTimeout(() => this.resizeWindowToContent(), 50);
+                setTimeout(() => { _langChangePending = false; }, 300);
             });
         }
 
@@ -381,23 +440,8 @@ class MainWindowUI {
                 this.toggleShortcutsPopover();
             });
 
-            // Hover to show
-            this.infoButton.addEventListener('mouseenter', () => {
-                if (!this.isInteractive) return;
-                this.showShortcutsPopover();
-            });
-            // Queue hide when leaving the button
-            this.infoButton.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
-
-            // Keep open when hovering popover
-            this.shortcutsPopover.addEventListener('mouseenter', () => {
-                if (this._popoverHideTimeout) {
-                    clearTimeout(this._popoverHideTimeout);
-                    this._popoverHideTimeout = null;
-                }
-            });
-            // Hide after a small delay when leaving popover
-            this.shortcutsPopover.addEventListener('mouseleave', () => this.queueHideShortcutsPopover());
+            // Show only on click; hover should not reveal the toolbar help text.
+            // This avoids accidental popover flicker and keeps the toolbar quiet.
 
             // Close on outside click
             document.addEventListener('click', (e) => {
@@ -416,31 +460,47 @@ class MainWindowUI {
             });
         }
 
-        // ── IPC-based drag (replaces -webkit-app-region:drag) ────────────────
-        // Moves the window via main-process setPosition so no OS drag ghost
-        // appears in screen captures / HackerRank proctoring.
+        // ── IPC-based drag ───────────────────────────────────────────────────
+        // Move the toolbar through the main process. Pointer events continue
+        // tracking when the pointer leaves the small toolbar window.
         const commandTab = document.querySelector('.command-tab');
         if (commandTab) {
             let dragging = false;
             let dragStartX = 0, dragStartY = 0;
             let lastMoveTime = 0;
 
-            commandTab.addEventListener('mousedown', (e) => {
-                // Only drag on left-click on the tab background (not on buttons/inputs)
+            const isToolbarControl = (target) => {
+                if (!target) return false;
+                const node = target.nodeType === 1 ? target : target.parentElement;
+                if (!node) return false;
+                return Boolean(
+                    node.closest('.command-item, .lang-cycler, .opacity-control, input, button, a, [role="button"]')
+                );
+            };
+
+            const stopDragging = () => {
+                if (!dragging) return;
+                dragging = false;
+                commandTab.style.cursor = 'grab';
+            };
+
+            commandTab.addEventListener('pointerdown', (e) => {
+                // Controls keep their normal click behavior; all other toolbar
+                // surface is available for dragging.
                 const target = e.target;
-                const isDraggable =
-                    target === commandTab ||
-                    target.classList.contains('command-separator') ||
-                    target.classList.contains('status-dot');
-                if (e.button !== 0 || !isDraggable) return;
+                if (e.button !== 0 || isToolbarControl(target)) return;
                 dragging = true;
                 dragStartX = e.screenX;
                 dragStartY = e.screenY;
+                lastMoveTime = 0;
                 commandTab.style.cursor = 'grabbing';
+                if (commandTab.setPointerCapture) {
+                    try { commandTab.setPointerCapture(e.pointerId); } catch (_) { }
+                }
                 e.preventDefault();
             });
 
-            document.addEventListener('mousemove', (e) => {
+            commandTab.addEventListener('pointermove', (e) => {
                 if (!dragging) return;
                 const now = Date.now();
                 if (now - lastMoveTime < 16) return; // ~60fps throttle
@@ -454,12 +514,9 @@ class MainWindowUI {
                 }
             });
 
-            document.addEventListener('mouseup', () => {
-                if (dragging) {
-                    dragging = false;
-                    commandTab.style.cursor = 'grab';
-                }
-            });
+            commandTab.addEventListener('pointerup', stopDragging);
+            commandTab.addEventListener('pointercancel', stopDragging);
+            window.addEventListener('blur', stopDragging);
         }
 
         // ── Opacity / Transparency slider ─────────────────────────────────────
@@ -506,14 +563,29 @@ class MainWindowUI {
     }
 
     setupEventListeners() {
-        // Prevent default mousedown to stop focus stealing, except for inputs and links.
-        // This is crucial for avoiding proctoring software detecting a focus loss when clicking toolbar elements.
+        // Prevent default mousedown to stop focus stealing, while keeping telemetry and
+        // click events intact for actual toolbar controls. The prior class-only check was
+        // too brittle for nested icon/span targets, so every real control is now detected
+        // by walking up to the nearest interactive ancestor.
+        const isToolbarInteractiveTarget = (target) => {
+            if (!target) return false;
+            const node = target.nodeType === 1 ? target : target.parentElement;
+            if (!node) return false;
+            return Boolean(
+                node.closest('.command-item, .lang-cycler, .opacity-control, input, button, a, [role="button"]')
+            );
+        };
+
         document.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
             const tag = e.target && e.target.tagName;
-            if (tag !== 'INPUT' && tag !== 'A') {
-                e.preventDefault();
-            }
+            if (tag === 'INPUT' || tag === 'A' || isToolbarInteractiveTarget(e.target)) return;
+            e.preventDefault();
         });
+
+        document.addEventListener('pointerup', () => this.resetToolbarActionLocks());
+        document.addEventListener('pointercancel', () => this.resetToolbarActionLocks());
+        window.addEventListener('blur', () => this.resetToolbarActionLocks());
 
         if (window.electronAPI) {
             // Fix interaction mode change listener
@@ -906,10 +978,7 @@ class MainWindowUI {
             const oldText = skillSpan.textContent;
             skillSpan.textContent = skillName;
 
-            const tooltip = this.isInteractive ?
-                `${skillName} - Click to switch skill | ⌘↑/↓ to navigate` :
-                `${skillName} - Enable interactive mode (Alt+A) to switch`;
-            this.skillIndicator.title = tooltip;
+            this.skillIndicator.removeAttribute('title');
 
             // Show language selector only for DSA (the only code-based skill)
             const langSelectorDiv = document.getElementById('languageSelector');

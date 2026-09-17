@@ -701,6 +701,13 @@ class WindowManager {
     window.on('show', () => {
       setTimeout(enforceAlwaysOnTop, 50);
       setTimeout(enforceAlwaysOnTop, 200);
+      // Re-enforce skipTaskbar on every show to prevent Windows from
+      // flashing the ghost taskbar icon when the window becomes visible.
+      if (process.platform === 'win32') {
+        try { window.setSkipTaskbar(true); } catch (_) { }
+        setTimeout(() => { if (!window.isDestroyed()) { try { window.setSkipTaskbar(true); } catch (_) { } } }, 100);
+        setTimeout(() => { if (!window.isDestroyed()) { try { window.setSkipTaskbar(true); } catch (_) { } } }, 300);
+      }
     });
 
     window.on('focus', () => {
@@ -938,6 +945,15 @@ class WindowManager {
       // app (HackerEarth, Unstop, browser) to EXIT fullscreen — exactly what
       // the user wants to avoid.
       win.showInactive();
+      // Re-enforce skipTaskbar immediately after showInactive on Windows.
+      // The OS can briefly paint a taskbar button when a window becomes
+      // visible — calling setSkipTaskbar(true) right after suppresses it
+      // before the next compositor frame, preventing the ghost terminal icon.
+      if (process.platform === 'win32') {
+        try { win.setSkipTaskbar(true); } catch (_) { }
+        setTimeout(() => { if (!win.isDestroyed()) { try { win.setSkipTaskbar(true); } catch (_) { } } }, 50);
+        setTimeout(() => { if (!win.isDestroyed()) { try { win.setSkipTaskbar(true); } catch (_) { } } }, 200);
+      }
       setTimeout(() => {
         if (win.isDestroyed()) return;
         if (!isLLM) {
@@ -1375,11 +1391,12 @@ class WindowManager {
       return;
     }
 
-    // The response window owns interactive controls (close, copy, and native
-    // drag), so always restore normal mouse handling before showing it.
+    // Keep the response window non-focusable so Windows continues treating it
+    // as an overlay instead of creating a separate taskbar application.
     try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
-    try { llmWindow.setFocusable(true); } catch (_) { }
+    try { llmWindow.setFocusable(false); } catch (_) { }
     try { llmWindow.setMovable(true); } catch (_) { }
+    try { llmWindow.setSkipTaskbar(true); } catch (_) { }
 
     logger.debug('Sending display-llm-response event to window');
     llmWindow.webContents.send('display-llm-response', {
@@ -1424,8 +1441,9 @@ class WindowManager {
       this.llmUserHidden = false;
 
       try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
-      try { llmWindow.setFocusable(true); } catch (_) { }
+      try { llmWindow.setFocusable(false); } catch (_) { }
       try { llmWindow.setMovable(true); } catch (_) { }
+      try { llmWindow.setSkipTaskbar(true); } catch (_) { }
 
       llmWindow.webContents.send('show-loading');
       this.showOnCurrentDesktop(llmWindow);
@@ -1446,6 +1464,27 @@ class WindowManager {
     if (llmWindow) {
       llmWindow.hide();
     }
+  }
+
+  toggleLLMResponse() {
+    if (this.isScreenBeingShared) {
+      return false;
+    }
+
+    const llmWindow = this.windows.get('llmResponse');
+    if (!llmWindow || llmWindow.isDestroyed()) {
+      return false;
+    }
+
+    if (llmWindow.isVisible()) {
+      this.llmUserHidden = true;
+      llmWindow.hide();
+      return false;
+    }
+
+    this.llmUserHidden = false;
+    this.showOnCurrentDesktop(llmWindow);
+    return true;
   }
 
   showSettings() {

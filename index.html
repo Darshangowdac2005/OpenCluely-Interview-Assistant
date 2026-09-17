@@ -409,7 +409,7 @@
 
 <body>
   <div class="command-tab">
-    <div class="command-item">
+    <div class="command-item" id="captureButton">
       <i class="fas fa-camera"></i>
       <span>⌘⇧S</span>
     </div>
@@ -425,15 +425,15 @@
     <div class="command-separator"></div>
     <div class="command-item" id="languageSelector">
       <i class="fas fa-code"></i>
-      <span id="codingLanguage" class="lang-cycler" title="Click to cycle language">C++</span>
+      <span id="codingLanguage" class="lang-cycler">C++</span>
     </div>
     <div class="command-separator"></div>
-    <div class="command-item opacity-control" id="opacityControl" title="Adjust transparency">
+    <div class="command-item opacity-control" id="opacityControl">
       <i class="fas fa-circle-half-stroke"></i>
       <input type="range" id="opacitySlider" min="10" max="100" value="100" step="5">
     </div>
     <div class="command-separator"></div>
-    <div class="command-item" id="infoButton" title="Shortcuts">
+    <div class="command-item" id="infoButton">
       <i class="fas fa-circle-info"></i>
     </div>
     <div class="command-separator"></div>
@@ -468,6 +468,14 @@
             + <span class="kbd">V</span>
           </td>
           <td>Toggle visibility</td>
+        </tr>
+        <tr>
+          <td>
+            <span class="kbd">Ctrl/Cmd</span>
+            + <span class="kbd">Shift</span>
+            + <span class="kbd">X</span>
+          </td>
+          <td>Toggle AI response window</td>
         </tr>
         <tr>
           <td>

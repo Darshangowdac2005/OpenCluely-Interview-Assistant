@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateActiveSkill: (skill) => ipcRenderer.invoke('update-active-skill', skill),
   restartAppForStealth: () => ipcRenderer.invoke('restart-app-for-stealth'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
+  closeLlmResponse: () => ipcRenderer.send('close-llm-response'),
   setWindowOpacity: (opacity) => ipcRenderer.invoke('set-window-opacity', opacity),
   notifyMainWindowReady: () => {
     try {

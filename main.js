@@ -413,6 +413,7 @@ class ApplicationController {
     const shortcuts = {
       "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
       "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
+      "CommandOrControl+Shift+X": () => windowManager.toggleLLMResponse(),
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
       "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
@@ -666,14 +667,22 @@ class ApplicationController {
 
     ipcMain.handle("move-window", (event, { deltaX, deltaY }) => {
       const mainWindow = windowManager.getWindow("main");
-      if (mainWindow) {
+      const x = Number(deltaX);
+      const y = Number(deltaY);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return { success: false, error: "Invalid window movement delta" };
+      }
+
+      if (windowManager.bindWindows) {
+        windowManager.moveBoundWindows(x, y);
+      } else if (mainWindow) {
         const [currentX, currentY] = mainWindow.getPosition();
-        const newX = currentX + deltaX;
-        const newY = currentY + deltaY;
+        const newX = currentX + x;
+        const newY = currentY + y;
         mainWindow.setPosition(newX, newY);
         logger.debug("Main window moved", {
-          deltaX,
-          deltaY,
+          deltaX: x,
+          deltaY: y,
           from: { x: currentX, y: currentY },
           to: { x: newX, y: newY },
         });
@@ -999,6 +1008,26 @@ class ApplicationController {
       }
 
       return { success: true };
+    });
+
+    ipcMain.handle("close-llm-response", () => {
+      const llmWindow = windowManager.windows.get('llmResponse');
+      if (!llmWindow || llmWindow.isDestroyed()) {
+        return { success: false, error: 'LLM response window is unavailable' };
+      }
+
+      // Use a direct window reference so closing the loading view does not
+      // depend on a renderer webContents identity lookup.
+      windowManager.llmUserHidden = true;
+      llmWindow.hide();
+      return { success: true };
+    });
+
+    ipcMain.on("close-llm-response", () => {
+      const llmWindow = windowManager.windows.get('llmResponse');
+      if (!llmWindow || llmWindow.isDestroyed()) return;
+      windowManager.llmUserHidden = true;
+      llmWindow.hide();
     });
 
     // Move the LLM response window
