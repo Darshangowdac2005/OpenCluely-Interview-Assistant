@@ -35,6 +35,7 @@ It is free and open source. Processing stays on your machine, and the only thing
 - **Invisible overlay.** Windows stay out of Zoom, Google Meet, Microsoft Teams, Discord, and OBS captures. You see the answer, the call does not.
 - **Survives exclusive fullscreen.** Works seamlessly above fullscreen assessment platforms (HackerEarth, Unstop Smart Hire) without stealing focus.
 - **Hidden during screen share.** When a share starts, the app can hide every window on its own.
+- **Stable toolbar controls.** The command bar no longer shows hover tooltips and now resets stale interaction locks so buttons keep working reliably over time.
 - **Flexible local voice.** Choose manual start/stop capture or automatic voice-activity detection without fixed-timer sentence cuts.
 - **Configurable streamed answers.** Route voice replies to chat, the floating overlay, or both.
 - **Direct image analysis.** Screenshots go straight to Gemini for visual reasoning, with no slow OCR step in between.
@@ -49,7 +50,7 @@ Pre-built installers are published with every release. These links always point 
 
 | Platform | File | Notes |
 |---|---|---|
-| Windows | [Setup .exe](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/download/v1.1.0/SystemHostSvc-Setup-1.1.0.exe) | NSIS installer. Adds a Start Menu shortcut. |
+| Windows | [Setup .exe](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/download/v1.2.3/SystemHostSvc-Setup-1.2.3.exe) | NSIS installer. Adds a Start Menu shortcut. |
 | Linux (Debian or Ubuntu) | [.deb](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
 | Linux (universal) | [.AppImage](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/latest) | No install. Run `chmod +x` then launch. |
 
@@ -163,6 +164,7 @@ OpenCluely is under active development. The core is stable and improvements ship
 ### Done
 
 - Stealth overlay with a draggable command bar and a click through toggle
+- Stable toolbar behavior with hover text removed and stale click locks reset automatically
 - Hidden during screen share, with automatic hiding when a share begins
 - Screenshot capture with direct Gemini analysis, no OCR step
 - Configurable manual or VAD-driven voice capture
