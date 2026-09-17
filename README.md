@@ -50,7 +50,7 @@ Pre-built installers are published with every release. These links always point 
 
 | Platform | File | Notes |
 |---|---|---|
-| Windows | [Setup .exe](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/download/v1.2.3/SystemHostSvc-Setup-1.2.3.exe) | NSIS installer. Adds a Start Menu shortcut. |
+| Windows | [Setup .exe](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/download/v1.2.4/SystemHostSvc-Setup-1.2.4.exe) | NSIS installer. Adds a Start Menu shortcut. |
 | Linux (Debian or Ubuntu) | [.deb](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/latest) | Pulls system deps automatically (Python, ffmpeg, GTK). |
 | Linux (universal) | [.AppImage](https://github.com/Darshangowdac2005/OpenCluely-Interview-Assistant/releases/latest) | No install. Run `chmod +x` then launch. |
 
