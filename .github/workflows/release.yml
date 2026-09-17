@@ -249,14 +249,20 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: OpenCluely ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          body_path: RELEASE_BODY.md
-          files: |
-            release/*
-          fail_on_unmatched_files: false
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "OpenCluely ${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_BODY.md \
+            --draft=false \
+            --prerelease=false
+
+          for asset in release/*; do
+            echo "Uploading ${asset}"
+            gh release upload "${GITHUB_REF_NAME}" "${asset}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+          done
