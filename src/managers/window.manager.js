@@ -711,9 +711,11 @@ class WindowManager {
     });
 
     window.on('focus', () => {
-      // These are ordinary interactive windows. Blurring them from a global
-      // focus handler prevents native controls and text inputs from working.
-      if (type === 'llmResponse' || type === 'settings' || type === 'onboarding') return;
+      // Settings and onboarding have text inputs (e.g. API keys) that require focus.
+      // Overlay windows (main and llmResponse) must NEVER keep OS focus; they must
+      // immediately yield focus back so fullscreen apps (HackerEarth, Unstop, F11)
+      // do not exit fullscreen mode or trigger proctoring violations.
+      if (type === 'settings' || type === 'onboarding') return;
 
       // Belt-and-suspenders: if the overlay ever receives OS focus (shouldn't
       // happen with focusable:false), immediately release it so the exam
@@ -798,28 +800,22 @@ class WindowManager {
     const topMargin = 20;
     const startY = displayY + topMargin;
 
-    // Use the wider window for horizontal centering
-    const maxWidth = Math.max(mainWidth, llmWidth);
-
-    // Center horizontally on the display
-    const xPosition = displayX + Math.round((screenWidth - maxWidth) / 2);
-
-    // Ensure windows don't go outside screen bounds horizontally
-    const adjustedMainX = Math.max(displayX, Math.min(displayX + screenWidth - mainWidth, xPosition));
-    const adjustedLlmX = Math.max(displayX, Math.min(displayX + screenWidth - llmWidth, xPosition));
-
-    // Position main window (top)
-    const mainX = adjustedMainX;
+    // Center each window horizontally on the display so the toolbar position
+    // does not shift abruptly whenever the LLM response window resizes
+    const mainX = Math.max(displayX, Math.min(displayX + screenWidth - mainWidth, displayX + Math.round((screenWidth - mainWidth) / 2)));
+    const llmX = Math.max(displayX, Math.min(displayX + screenWidth - llmWidth, displayX + Math.round((screenWidth - llmWidth) / 2)));
     const mainY = startY;
-    mainWindow.setPosition(mainX, mainY);
-
-    // Position LLM response window below with gap
-    const llmX = adjustedLlmX;
     const llmY = startY + mainHeight + this.windowGap;
+
+    mainWindow.setPosition(mainX, mainY);
     llmWindow.setPosition(llmX, llmY);
 
+    // Ensure neither window takes focus from position updates
+    try { mainWindow.blur(); } catch (_) { }
+    try { llmWindow.blur(); } catch (_) { }
+
     // Update stored position (use main window position as reference)
-    this.boundWindowsPosition = { x: adjustedMainX, y: startY };
+    this.boundWindowsPosition = { x: mainX, y: startY };
 
     logger.debug('Positioned bound windows at top (column layout)', {
       mainPosition: `${mainX},${mainY}`,
@@ -910,6 +906,10 @@ class WindowManager {
         // showInactive() makes the window visible WITHOUT stealing focus from
         // the fullscreen app — prevents HackerEarth/Unstop from exiting fullscreen.
         win.showInactive();
+        if (isLLM || (this.windows.get('main') && win.id === this.windows.get('main').id)) {
+          try { win.setFocusable(false); } catch (_) { }
+          try { win.blur(); } catch (_) { }
+        }
         setMacOSAlwaysOnTop();
         setTimeout(() => { if (!win.isDestroyed()) setMacOSAlwaysOnTop(); }, 100);
         // Keep LLM window visible across workspaces; others revert
@@ -945,6 +945,10 @@ class WindowManager {
       // app (HackerEarth, Unstop, browser) to EXIT fullscreen — exactly what
       // the user wants to avoid.
       win.showInactive();
+      if (isLLM || (this.windows.get('main') && win.id === this.windows.get('main').id)) {
+        try { win.setFocusable(false); } catch (_) { }
+        try { win.blur(); } catch (_) { }
+      }
       // Re-enforce skipTaskbar immediately after showInactive on Windows.
       // The OS can briefly paint a taskbar button when a window becomes
       // visible — calling setSkipTaskbar(true) right after suppresses it
@@ -1204,9 +1208,9 @@ class WindowManager {
           window.setIgnoreMouseEvents(true, { forward: true });
         }
 
-        // The toolbar is non-focusable, but the response panel must retain
-        // normal focus behavior for its native controls and drag region.
-        if (type === 'main') {
+        // The toolbar and LLM response overlay are strictly non-focusable so they never
+        // steal OS focus or cause background fullscreen apps to exit fullscreen.
+        if (type === 'main' || type === 'llmResponse') {
           try { window.setFocusable(false); } catch (_) { /* not supported on all platforms */ }
         }
 
@@ -1411,8 +1415,9 @@ class WindowManager {
       return;
     }
 
-    logger.debug('Showing and focusing LLM window');
+    logger.debug('Showing LLM window without stealing focus');
     this.showOnCurrentDesktop(llmWindow);
+    try { llmWindow.blur(); } catch (_) { }
 
     // Position bound windows when LLM response is shown
     if (this.bindWindows) {
@@ -1564,7 +1569,10 @@ class WindowManager {
     const width = Math.round(Number(optimalSize.width)) || 840;
     const height = Math.round(Number(optimalSize.height)) || 480;
 
+    try { llmWindow.setFocusable(false); } catch (_) { }
     llmWindow.setSize(width, height);
+    try { llmWindow.setFocusable(false); } catch (_) { }
+    try { llmWindow.blur(); } catch (_) { }
 
     // If windows are bound, position them together; otherwise center the LLM window
     if (this.bindWindows) {
@@ -1611,6 +1619,7 @@ class WindowManager {
     const y = displayY + Math.max(0, Math.round((screenHeight - windowHeight) / 2));
 
     window.setPosition(x, y);
+    try { window.blur(); } catch (_) { }
 
     logger.debug('Positioned window at center', {
       position: `${x},${y}`,

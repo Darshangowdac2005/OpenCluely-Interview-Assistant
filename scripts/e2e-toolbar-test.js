@@ -73,6 +73,14 @@ ipcMain.handle('notify-main-window-ready', () => {
   return { success: true };
 });
 
+ipcMain.handle('resize-llm-window-for-content', (_event, contentMetrics) => {
+  return { success: true, contentMetrics };
+});
+
+ipcMain.handle('close-llm-response', () => {
+  return { success: true };
+});
+
 async function runTests() {
   console.log('\n========================================');
   console.log('   E2E TOOLBAR & FOCUS TEST SUITE       ');
@@ -315,6 +323,62 @@ async function runTests() {
     window.mainWindowUI.currentSkill
   `);
   assert(skillAfterShortcut !== skillBeforeShortcut, `Alt+K cycles skill from ${skillBeforeShortcut} to ${skillAfterShortcut}`);
+
+  // TEST 8: LLM Response Overlay Non-Activation & Fullscreen Preservation
+  console.log('\n-- Test Group 8: LLM Response Fullscreen & Focus Protection --');
+  
+  const llmTestWindow = new BrowserWindow({
+    width: 840,
+    height: 480,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    fullscreenable: false,
+    focusable: false,
+    type: process.platform === 'win32' ? 'toolbar' : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  await llmTestWindow.loadFile(path.join(__dirname, '../llm-response.html'));
+  llmTestWindow.showInactive();
+
+  assert(llmTestWindow.isVisible() === true, 'LLM response window is visible');
+  assert(llmTestWindow.isFocusable() === false, 'LLM response window is strictly non-focusable');
+  assert(llmTestWindow.isFocused() === false, 'LLM response window did not steal focus on showInactive');
+
+  // Send AI response payload
+  llmTestWindow.webContents.send('display-llm-response', {
+    content: '### Optimal Solution\n\n```python\ndef two_sum(nums, target):\n    lookup = {}\n    for i, num in enumerate(nums):\n        if target - num in lookup:\n            return [lookup[target - num], i]\n        lookup[num] = i\n    return []\n```',
+    metadata: { skill: 'dsa' }
+  });
+
+  await new Promise(r => setTimeout(r, 600));
+
+  const contentRendered = await llmTestWindow.webContents.executeJavaScript(`
+    Boolean(document.getElementById('response-content') && !document.getElementById('response-content').classList.contains('hidden'))
+  `);
+  assert(contentRendered === true, 'AI response content rendered successfully in DOM');
+
+  // Verify non-activation after response hits screen
+  assert(llmTestWindow.isFocused() === false, 'LLM response window remains non-focused when answer hits screen');
+
+  // Simulate mouseenter over panel
+  await llmTestWindow.webContents.executeJavaScript(`
+    const panel = document.querySelector('.panel-content');
+    if (panel) panel.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+  `);
+  await new Promise(r => setTimeout(r, 100));
+
+  assert(llmTestWindow.isFocused() === false, 'Mouse hovering over response panel does NOT steal focus');
+
+  llmTestWindow.destroy();
 
   console.log('\n========================================');
   console.log(`  SUMMARY: ${passed} PASSED, ${failed} FAILED`);

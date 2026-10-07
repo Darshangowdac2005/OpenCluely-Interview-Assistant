@@ -545,14 +545,14 @@
             <div id="split-layout" class="split-layout hidden">
                 <!-- Text Panel -->
                 <div class="text-panel">
-                    <div class="panel-content" tabindex="0">
+                    <div class="panel-content">
                         <div id="text-content" class="markdown-content"></div>
                     </div>
                 </div>
 
                 <!-- Code Panel -->
                 <div class="code-panel">
-                    <div class="panel-content" tabindex="0">
+                    <div class="panel-content">
                         <div id="code-content"></div>
                     </div>
                 </div>
@@ -560,7 +560,7 @@
 
             <!-- Full Content (when no code detected) -->
             <div id="full-content" class="full-content hidden">
-                <div class="full-content-inner" tabindex="0">
+                <div class="full-content-inner">
                     <div id="full-markdown" class="markdown-content"></div>
                 </div>
             </div>
@@ -799,11 +799,10 @@
                         document.querySelector('.full-content-inner')
                     ].filter(el => el !== null);
                 }
-                // Reset scroll positions and ensure elements are focusable
+                // Reset scroll positions
                 scrollableElements.forEach(element => {
                     element.scrollTop = 0;
                     element.scrollLeft = 0;
-                    element.setAttribute('tabindex', '0');
                 });
 
                 // Enable scrolling if interactive mode is on
@@ -819,7 +818,7 @@
                     // Enable mouse/trackpad scrolling with smooth behavior
                     element.style.scrollBehavior = 'smooth';
 
-                    // Add mouse enter handler to ensure focus for scrolling
+                    // Track mouse enter/leave for visual hover states without stealing OS focus
                     element.addEventListener('mouseenter', handleMouseEnter, { passive: true });
                     element.addEventListener('mouseleave', handleMouseLeave, { passive: true });
 
@@ -841,8 +840,8 @@
         }
 
         function handleMouseEnter(e) {
-            // Focus the element for keyboard scrolling and ensure it's ready for mouse scrolling
-            e.target.focus({ preventScroll: true });
+            // Never call e.target.focus() — stealing focus causes Windows exclusive
+            // fullscreen apps (browsers in F11, HackerEarth, Unstop) to exit fullscreen.
             e.target.style.cursor = 'grab';
         }
 
