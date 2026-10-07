@@ -31,7 +31,12 @@ function resolveEnvPath() {
   }
 }
 const ENV_PATH = resolveEnvPath();
-require("dotenv").config({ path: ENV_PATH });
+require("dotenv").config({ path: ENV_PATH, override: true });
+
+// Align GOOGLE_API_KEY with GEMINI_API_KEY so @google/genai SDK never uses a conflicting stale key
+if (process.env.GEMINI_API_KEY) {
+  process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
+}
 
 // Format a value for a single .env line. Newlines are collapsed to spaces and
 // backslashes are kept verbatim (doubling them corrupts Windows paths on the
@@ -777,8 +782,13 @@ class ApplicationController {
     });
 
     ipcMain.handle("set-gemini-api-key", (event, apiKey) => {
-      llmService.updateApiKey(apiKey);
-      return llmService.getStats();
+      const key = String(apiKey || '').trim();
+      llmService.updateApiKey(key);
+      this.persistEnvUpdates({ GEMINI_API_KEY: key, GOOGLE_API_KEY: key });
+      return {
+        success: true,
+        ...llmService.getStats()
+      };
     });
 
     ipcMain.handle("get-gemini-status", () => {
@@ -1919,7 +1929,10 @@ class ApplicationController {
         envUpdates.WHISPER_SEGMENT_MS = String(settings.whisperSegmentMs);
       }
       if (settings.geminiKey !== undefined) {
-        envUpdates.GEMINI_API_KEY = settings.geminiKey;
+        const key = String(settings.geminiKey || '').trim();
+        envUpdates.GEMINI_API_KEY = key;
+        envUpdates.GOOGLE_API_KEY = key;
+        llmService.updateApiKey(key);
       }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
@@ -2062,6 +2075,12 @@ class ApplicationController {
       const tmpPath = envPath + ".tmp";
       fs.writeFileSync(tmpPath, newContent, "utf8");
       fs.renameSync(tmpPath, envPath);
+
+      // Also keep project root .env synced in development if paths differ
+      const projectEnv = path.join(process.cwd(), ".env");
+      if (envPath !== projectEnv) {
+        try { fs.writeFileSync(projectEnv, newContent, "utf8"); } catch (_) { }
+      }
     } catch (e) {
       logger.error("Failed to persist .env updates", {
         error: e.message,
@@ -2126,9 +2145,9 @@ class ApplicationController {
           setTimeout(retryDockIcon, 500);
         }
       } else {
-        // Windows/Linux - update window icons
+        // Windows/Linux - update window icons (dialogs only, never frameless overlay windows like main or llmResponse to prevent taskbar glitches)
         windowManager.windows.forEach((window, type) => {
-          if (window && !window.isDestroyed()) {
+          if (window && !window.isDestroyed() && type !== 'main' && type !== 'llmResponse') {
             window.setIcon(fullIconPath);
           }
         });

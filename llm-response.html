@@ -661,7 +661,6 @@
                         hideLoadingState();
                         displayResponse(actualData);
                         setupScrolling();
-                        setTimeout(verifyDisplayState, 500);
                         console.log('[LLM-RESPONSE] Handler completed successfully');
                     } catch (err) {
                         console.error('[LLM-RESPONSE] Error in handler:', err.message, err.stack);

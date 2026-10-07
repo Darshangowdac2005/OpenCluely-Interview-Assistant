@@ -644,8 +644,14 @@ class WindowManager {
       }, 100);
     }
 
-    // Ensure window appears on all workspaces/desktops initially
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Ensure window appears on all workspaces/desktops initially (macOS/Linux only)
+    // On Windows, setVisibleOnAllWorkspaces triggers IVirtualDesktopManager notifications
+    // that wake up explorer.exe and cause the taskbar to surface.
+    if (process.platform === 'darwin') {
+      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    } else if (process.platform === 'linux') {
+      window.setVisibleOnAllWorkspaces(true);
+    }
 
     // Hide from taskbar to maintain stealth
     window.setSkipTaskbar(true);
@@ -693,6 +699,7 @@ class WindowManager {
 
     // Event-based enforcement
     window.on('blur', () => {
+      if (type === 'main' || type === 'llmResponse') return;
       setTimeout(enforceAlwaysOnTop, 50);
       setTimeout(enforceAlwaysOnTop, 200);
       setTimeout(enforceAlwaysOnTop, 500);
@@ -701,13 +708,6 @@ class WindowManager {
     window.on('show', () => {
       setTimeout(enforceAlwaysOnTop, 50);
       setTimeout(enforceAlwaysOnTop, 200);
-      // Re-enforce skipTaskbar on every show to prevent Windows from
-      // flashing the ghost taskbar icon when the window becomes visible.
-      if (process.platform === 'win32') {
-        try { window.setSkipTaskbar(true); } catch (_) { }
-        setTimeout(() => { if (!window.isDestroyed()) { try { window.setSkipTaskbar(true); } catch (_) { } } }, 100);
-        setTimeout(() => { if (!window.isDestroyed()) { try { window.setSkipTaskbar(true); } catch (_) { } } }, 300);
-      }
     });
 
     window.on('focus', () => {
@@ -807,12 +807,14 @@ class WindowManager {
     const mainY = startY;
     const llmY = startY + mainHeight + this.windowGap;
 
-    mainWindow.setPosition(mainX, mainY);
-    llmWindow.setPosition(llmX, llmY);
-
-    // Ensure neither window takes focus from position updates
-    try { mainWindow.blur(); } catch (_) { }
-    try { llmWindow.blur(); } catch (_) { }
+    const [curMainX, curMainY] = mainWindow.getPosition();
+    if (curMainX !== mainX || curMainY !== mainY) {
+      mainWindow.setPosition(mainX, mainY);
+    }
+    const [curLlmX, curLlmY] = llmWindow.getPosition();
+    if (curLlmX !== llmX || curLlmY !== llmY) {
+      llmWindow.setPosition(llmX, llmY);
+    }
 
     // Update stored position (use main window position as reference)
     this.boundWindowsPosition = { x: mainX, y: startY };
@@ -923,7 +925,9 @@ class WindowManager {
       }, 50);
     } else {
       // Linux/Windows
-      win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      if (process.platform === 'linux') {
+        win.setVisibleOnAllWorkspaces(true);
+      }
       // On Windows use 'screen-saver' level to appear above exclusive fullscreen
       const applyWinTop = () => {
         if (win.isDestroyed()) return;
@@ -940,27 +944,13 @@ class WindowManager {
         }
       };
       applyWinTop();
-      // showInactive() surfaces the window without stealing focus from the
-      // fullscreen app. Using win.show()+win.focus() would cause the fullscreen
-      // app (HackerEarth, Unstop, browser) to EXIT fullscreen — exactly what
-      // the user wants to avoid.
-      win.showInactive();
-      if (isLLM || (this.windows.get('main') && win.id === this.windows.get('main').id)) {
-        try { win.setFocusable(false); } catch (_) { }
-        try { win.blur(); } catch (_) { }
-      }
-      // Re-enforce skipTaskbar immediately after showInactive on Windows.
-      // The OS can briefly paint a taskbar button when a window becomes
-      // visible — calling setSkipTaskbar(true) right after suppresses it
-      // before the next compositor frame, preventing the ghost terminal icon.
-      if (process.platform === 'win32') {
-        try { win.setSkipTaskbar(true); } catch (_) { }
-        setTimeout(() => { if (!win.isDestroyed()) { try { win.setSkipTaskbar(true); } catch (_) { } } }, 50);
-        setTimeout(() => { if (!win.isDestroyed()) { try { win.setSkipTaskbar(true); } catch (_) { } } }, 200);
+      // Only call showInactive if not already visible to avoid waking Windows Shell/Taskbar
+      if (!win.isVisible()) {
+        win.showInactive();
       }
       setTimeout(() => {
         if (win.isDestroyed()) return;
-        if (!isLLM) {
+        if (process.platform === 'linux' && !isLLM) {
           win.setVisibleOnAllWorkspaces(false);
         }
         applyWinTop();
@@ -1400,7 +1390,6 @@ class WindowManager {
     try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
     try { llmWindow.setFocusable(false); } catch (_) { }
     try { llmWindow.setMovable(true); } catch (_) { }
-    try { llmWindow.setSkipTaskbar(true); } catch (_) { }
 
     logger.debug('Sending display-llm-response event to window');
     llmWindow.webContents.send('display-llm-response', {
@@ -1416,8 +1405,9 @@ class WindowManager {
     }
 
     logger.debug('Showing LLM window without stealing focus');
-    this.showOnCurrentDesktop(llmWindow);
-    try { llmWindow.blur(); } catch (_) { }
+    if (!llmWindow.isVisible()) {
+      this.showOnCurrentDesktop(llmWindow);
+    }
 
     // Position bound windows when LLM response is shown
     if (this.bindWindows) {
@@ -1448,10 +1438,11 @@ class WindowManager {
       try { llmWindow.setIgnoreMouseEvents(false); } catch (_) { }
       try { llmWindow.setFocusable(false); } catch (_) { }
       try { llmWindow.setMovable(true); } catch (_) { }
-      try { llmWindow.setSkipTaskbar(true); } catch (_) { }
 
       llmWindow.webContents.send('show-loading');
-      this.showOnCurrentDesktop(llmWindow);
+      if (!llmWindow.isVisible()) {
+        this.showOnCurrentDesktop(llmWindow);
+      }
 
       // Position bound windows when LLM loading is shown
       if (this.bindWindows) {
@@ -1569,10 +1560,10 @@ class WindowManager {
     const width = Math.round(Number(optimalSize.width)) || 840;
     const height = Math.round(Number(optimalSize.height)) || 480;
 
-    try { llmWindow.setFocusable(false); } catch (_) { }
-    llmWindow.setSize(width, height);
-    try { llmWindow.setFocusable(false); } catch (_) { }
-    try { llmWindow.blur(); } catch (_) { }
+    const [curWidth, curHeight] = llmWindow.getSize();
+    if (curWidth !== width || curHeight !== height) {
+      llmWindow.setSize(width, height);
+    }
 
     // If windows are bound, position them together; otherwise center the LLM window
     if (this.bindWindows) {
@@ -1618,8 +1609,10 @@ class WindowManager {
     const x = displayX + Math.round((screenWidth - windowWidth) / 2);
     const y = displayY + Math.max(0, Math.round((screenHeight - windowHeight) / 2));
 
-    window.setPosition(x, y);
-    try { window.blur(); } catch (_) { }
+    const [curX, curY] = window.getPosition();
+    if (curX !== x || curY !== y) {
+      window.setPosition(x, y);
+    }
 
     logger.debug('Positioned window at center', {
       position: `${x},${y}`,

@@ -15,7 +15,7 @@ class LLMService {
   }
 
   initializeClient() {
-    const apiKey = (config.getApiKey('GEMINI') || '').trim();
+    const apiKey = (config.getApiKey('GEMINI') || process.env.GEMINI_API_KEY || '').trim();
 
     if (!this.hasValidApiKey(apiKey)) {
       this.client = null;
@@ -28,11 +28,15 @@ class LLMService {
       return;
     }
 
+    // Keep process.env clean and aligned so @google/genai SDK doesn't conflict with stale system keys
+    process.env.GEMINI_API_KEY = apiKey;
+    process.env.GOOGLE_API_KEY = apiKey;
+
     try {
       this.client = new GoogleGenAI({ apiKey });
 
-      // Use the configured model name (default: gemini-3.5-flash)
-      this.model = config.get('llm.gemini.model');
+      // Use the configured model name (default: gemini-3.5-flash-lite)
+      this.model = config.get('llm.gemini.model') || 'gemini-3.5-flash-lite';
       this.isInitialized = true;
 
       logger.info('Gemini AI client initialized successfully', {
@@ -1533,7 +1537,13 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   updateApiKey(newApiKey) {
-    process.env.GEMINI_API_KEY = String(newApiKey || '').trim();
+    const key = String(newApiKey || '').trim();
+    process.env.GEMINI_API_KEY = key;
+    if (key) {
+      process.env.GOOGLE_API_KEY = key;
+    } else {
+      delete process.env.GOOGLE_API_KEY;
+    }
     this.isInitialized = false;
     this.initializeClient();
 
@@ -1541,8 +1551,14 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
   }
 
   getStats() {
+    const apiKey = (config.getApiKey('GEMINI') || process.env.GEMINI_API_KEY || '').trim();
+    const hasKey = this.hasValidApiKey(apiKey);
     return {
+      success: true,
+      hasApiKey: hasKey,
+      isConfigured: hasKey,
       isInitialized: this.isInitialized,
+      model: this.model || config.get('llm.gemini.model') || 'gemini-3.5-flash-lite',
       requestCount: this.requestCount,
       errorCount: this.errorCount,
       successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
