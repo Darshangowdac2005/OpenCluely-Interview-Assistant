@@ -7,6 +7,7 @@
     "start": "node scripts/start-electron.js",
     "dev": "node scripts/start-electron.js --no-sandbox --disable-gpu",
     "test-speech": "node scripts/test-speech.js",
+    "test:e2e": "electron scripts/e2e-toolbar-test.js",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",

@@ -466,57 +466,100 @@ class MainWindowUI {
         const commandTab = document.querySelector('.command-tab');
         if (commandTab) {
             let dragging = false;
+            let pendingDrag = false;
             let dragStartX = 0, dragStartY = 0;
             let lastMoveTime = 0;
+            let activePointerId = null;
 
             const isToolbarControl = (target) => {
                 if (!target) return false;
                 const node = target.nodeType === 1 ? target : target.parentElement;
                 if (!node) return false;
                 return Boolean(
-                    node.closest('.command-item, .lang-cycler, .opacity-control, input, button, a, [role="button"]')
+                    node.closest('.command-item, .lang-cycler, .opacity-control, .shortcuts-popover, input, button, a, [role="button"]')
                 );
             };
 
-            const stopDragging = () => {
-                if (!dragging) return;
-                dragging = false;
-                commandTab.style.cursor = 'grab';
+            const releaseCapture = (pointerId) => {
+                const pid = pointerId != null ? pointerId : activePointerId;
+                if (pid != null && commandTab.releasePointerCapture) {
+                    try {
+                        if (!commandTab.hasPointerCapture || commandTab.hasPointerCapture(pid)) {
+                            commandTab.releasePointerCapture(pid);
+                        }
+                    } catch (_) { }
+                }
+            };
+
+            const stopDragging = (e) => {
+                const pid = (e && e.pointerId != null) ? e.pointerId : activePointerId;
+                releaseCapture(pid);
+                activePointerId = null;
+                pendingDrag = false;
+                if (dragging) {
+                    dragging = false;
+                    commandTab.style.cursor = 'grab';
+                }
             };
 
             commandTab.addEventListener('pointerdown', (e) => {
-                // Controls keep their normal click behavior; all other toolbar
-                // surface is available for dragging.
+                if (e.button !== 0) return;
                 const target = e.target;
-                if (e.button !== 0 || isToolbarControl(target)) return;
-                dragging = true;
+                if (isToolbarControl(target)) {
+                    // Control clicked: release any lingering capture and ensure normal click
+                    releaseCapture(e.pointerId);
+                    pendingDrag = false;
+                    dragging = false;
+                    return;
+                }
+                // Surface clicked: record position for potential drag. Do NOT capture pointer
+                // or preventDefault until user actually moves beyond a threshold (3px).
+                pendingDrag = true;
+                dragging = false;
                 dragStartX = e.screenX;
                 dragStartY = e.screenY;
                 lastMoveTime = 0;
-                commandTab.style.cursor = 'grabbing';
-                if (commandTab.setPointerCapture) {
-                    try { commandTab.setPointerCapture(e.pointerId); } catch (_) { }
-                }
-                e.preventDefault();
+                activePointerId = e.pointerId;
             });
 
             commandTab.addEventListener('pointermove', (e) => {
-                if (!dragging) return;
-                const now = Date.now();
-                if (now - lastMoveTime < 16) return; // ~60fps throttle
-                lastMoveTime = now;
-                const deltaX = e.screenX - dragStartX;
-                const deltaY = e.screenY - dragStartY;
-                dragStartX = e.screenX;
-                dragStartY = e.screenY;
-                if (window.electronAPI && window.electronAPI.moveWindow) {
-                    window.electronAPI.moveWindow(deltaX, deltaY);
+                if (!pendingDrag && !dragging) return;
+
+                // Threshold check: only initiate drag if pointer moved at least 3 pixels
+                if (pendingDrag && !dragging) {
+                    const dist = Math.hypot(e.screenX - dragStartX, e.screenY - dragStartY);
+                    if (dist >= 3) {
+                        dragging = true;
+                        commandTab.style.cursor = 'grabbing';
+                        if (commandTab.setPointerCapture && activePointerId != null) {
+                            try { commandTab.setPointerCapture(activePointerId); } catch (_) { }
+                        }
+                    } else {
+                        return;
+                    }
+                }
+
+                if (dragging) {
+                    const now = Date.now();
+                    if (now - lastMoveTime < 16) return; // ~60fps throttle
+                    lastMoveTime = now;
+                    const deltaX = e.screenX - dragStartX;
+                    const deltaY = e.screenY - dragStartY;
+                    dragStartX = e.screenX;
+                    dragStartY = e.screenY;
+                    if (window.electronAPI && window.electronAPI.moveWindow) {
+                        window.electronAPI.moveWindow(deltaX, deltaY);
+                    }
                 }
             });
 
+            // Clean up drag and capture on all release and cancel scenarios
+            commandTab.addEventListener('lostpointercapture', stopDragging);
             commandTab.addEventListener('pointerup', stopDragging);
             commandTab.addEventListener('pointercancel', stopDragging);
-            window.addEventListener('blur', stopDragging);
+            window.addEventListener('pointerup', stopDragging);
+            window.addEventListener('pointercancel', stopDragging);
+            window.addEventListener('blur', () => stopDragging(null));
         }
 
         // ── Opacity / Transparency slider ─────────────────────────────────────
@@ -572,7 +615,7 @@ class MainWindowUI {
             const node = target.nodeType === 1 ? target : target.parentElement;
             if (!node) return false;
             return Boolean(
-                node.closest('.command-item, .lang-cycler, .opacity-control, input, button, a, [role="button"]')
+                node.closest('.command-item, .lang-cycler, .opacity-control, .shortcuts-popover, .status-dot, input, button, a, [role="button"]')
             );
         };
 
