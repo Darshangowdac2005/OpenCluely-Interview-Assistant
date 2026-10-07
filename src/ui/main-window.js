@@ -296,13 +296,15 @@ class MainWindowUI {
         }
 
         // Screenshot click handler
-        this.screenshotButton.addEventListener('click', () => {
+        this.screenshotButton.addEventListener('click', async () => {
             if (!this.isInteractive) return;
             if (this._captureActionPending) return; // prevent double-fire
             if (window.electronAPI && window.electronAPI.takeScreenshot) {
                 this._captureActionPending = true;
                 try {
-                    window.electronAPI.takeScreenshot();
+                    await window.electronAPI.takeScreenshot();
+                } catch (err) {
+                    logger.error('takeScreenshot failed', { error: err && err.message });
                 } finally {
                     setTimeout(() => { this._captureActionPending = false; }, 800);
                 }
@@ -415,20 +417,23 @@ class MainWindowUI {
 
             // Click cycles forward — debounced to prevent stuck state on rapid clicks
             let _langChangePending = false;
-            this.languageCycler.addEventListener('click', () => {
+            this.languageCycler.addEventListener('click', async () => {
                 if (!this.isInteractive) return;
                 if (_langChangePending) return;
                 _langChangePending = true;
-                this._currentLangIndex = (this._currentLangIndex + 1) % this._languages.length;
-                this._updateLanguageCycler();
-                const lang = this._languages[this._currentLangIndex];
-                if (window.electronAPI && window.electronAPI.saveSettings) {
-                    window.electronAPI.saveSettings({ codingLanguage: lang }).catch(err => {
-                        logger.error('Failed to save coding language', { error: err && err.message });
-                    });
+                try {
+                    this._currentLangIndex = (this._currentLangIndex + 1) % this._languages.length;
+                    this._updateLanguageCycler();
+                    const lang = this._languages[this._currentLangIndex];
+                    if (window.electronAPI && window.electronAPI.saveSettings) {
+                        await window.electronAPI.saveSettings({ codingLanguage: lang });
+                    }
+                    setTimeout(() => this.resizeWindowToContent(), 50);
+                } catch (err) {
+                    logger.error('Failed to save coding language', { error: err && err.message });
+                } finally {
+                    setTimeout(() => { _langChangePending = false; }, 300);
                 }
-                setTimeout(() => this.resizeWindowToContent(), 50);
-                setTimeout(() => { _langChangePending = false; }, 300);
             });
         }
 
@@ -461,15 +466,16 @@ class MainWindowUI {
         }
 
         // ── IPC-based drag ───────────────────────────────────────────────────
-        // Move the toolbar through the main process. Pointer events continue
-        // tracking when the pointer leaves the small toolbar window.
+        // Move the toolbar through the main process without DOM pointer capture.
+        // On Windows with focusable: false (WS_EX_NOACTIVATE), setPointerCapture
+        // triggers WM_CAPTURECHANGED during SetWindowPos which breaks Chromium's
+        // pointer dispatcher and leaves all toolbar buttons unclickable.
         const commandTab = document.querySelector('.command-tab');
         if (commandTab) {
             let dragging = false;
             let pendingDrag = false;
             let dragStartX = 0, dragStartY = 0;
             let lastMoveTime = 0;
-            let activePointerId = null;
 
             const isToolbarControl = (target) => {
                 if (!target) return false;
@@ -480,21 +486,7 @@ class MainWindowUI {
                 );
             };
 
-            const releaseCapture = (pointerId) => {
-                const pid = pointerId != null ? pointerId : activePointerId;
-                if (pid != null && commandTab.releasePointerCapture) {
-                    try {
-                        if (!commandTab.hasPointerCapture || commandTab.hasPointerCapture(pid)) {
-                            commandTab.releasePointerCapture(pid);
-                        }
-                    } catch (_) { }
-                }
-            };
-
-            const stopDragging = (e) => {
-                const pid = (e && e.pointerId != null) ? e.pointerId : activePointerId;
-                releaseCapture(pid);
-                activePointerId = null;
+            const stopDragging = () => {
                 pendingDrag = false;
                 if (dragging) {
                     dragging = false;
@@ -506,24 +498,26 @@ class MainWindowUI {
                 if (e.button !== 0) return;
                 const target = e.target;
                 if (isToolbarControl(target)) {
-                    // Control clicked: release any lingering capture and ensure normal click
-                    releaseCapture(e.pointerId);
-                    pendingDrag = false;
-                    dragging = false;
+                    stopDragging();
                     return;
                 }
-                // Surface clicked: record position for potential drag. Do NOT capture pointer
-                // or preventDefault until user actually moves beyond a threshold (3px).
+                // Surface clicked: record position for potential drag.
+                // Do NOT capture pointer or preventDefault so buttons and DOM stay responsive.
                 pendingDrag = true;
                 dragging = false;
                 dragStartX = e.screenX;
                 dragStartY = e.screenY;
                 lastMoveTime = 0;
-                activePointerId = e.pointerId;
             });
 
-            commandTab.addEventListener('pointermove', (e) => {
+            window.addEventListener('pointermove', (e) => {
                 if (!pendingDrag && !dragging) return;
+
+                // Safety: if mouse button was released outside the window
+                if (e.isTrusted && e.buttons === 0) {
+                    stopDragging();
+                    return;
+                }
 
                 // Threshold check: only initiate drag if pointer moved at least 3 pixels
                 if (pendingDrag && !dragging) {
@@ -531,9 +525,6 @@ class MainWindowUI {
                     if (dist >= 3) {
                         dragging = true;
                         commandTab.style.cursor = 'grabbing';
-                        if (commandTab.setPointerCapture && activePointerId != null) {
-                            try { commandTab.setPointerCapture(activePointerId); } catch (_) { }
-                        }
                     } else {
                         return;
                     }
@@ -553,13 +544,9 @@ class MainWindowUI {
                 }
             });
 
-            // Clean up drag and capture on all release and cancel scenarios
-            commandTab.addEventListener('lostpointercapture', stopDragging);
-            commandTab.addEventListener('pointerup', stopDragging);
-            commandTab.addEventListener('pointercancel', stopDragging);
             window.addEventListener('pointerup', stopDragging);
             window.addEventListener('pointercancel', stopDragging);
-            window.addEventListener('blur', () => stopDragging(null));
+            window.addEventListener('blur', stopDragging);
         }
 
         // ── Opacity / Transparency slider ─────────────────────────────────────
@@ -602,6 +589,16 @@ class MainWindowUI {
                     setTimeout(() => this.resizeWindowToContent(), 50);
                 }
             });
+
+            // Initialize slider value from current settings
+            if (window.electronAPI && window.electronAPI.getSettings) {
+                window.electronAPI.getSettings().then(settings => {
+                    if (settings && settings.windowOpacity !== undefined) {
+                        const pct = Math.round(parseFloat(settings.windowOpacity) * 100);
+                        if (!isNaN(pct)) opacitySlider.value = pct;
+                    }
+                }).catch(() => { });
+            }
         }
     }
 
@@ -679,16 +676,57 @@ class MainWindowUI {
                 this.loadSpeechAvailability();
             });
 
-            // Global keyboard shortcuts
+            // Listen for opacity changes from shortcuts or settings window
+            if (window.electronAPI.onOpacityChanged) {
+                window.electronAPI.onOpacityChanged((event, data) => {
+                    if (data && typeof data.opacity === 'number') {
+                        const slider = document.getElementById('opacitySlider');
+                        if (slider) {
+                            slider.value = Math.round(data.opacity * 100);
+                        }
+                    }
+                });
+            }
+
+            // Keyboard shortcuts (when window or document has focus)
             document.addEventListener('keydown', (e) => {
-                if (e.altKey && e.key === 'r' && this.isInteractive) {
+                // Speech recognition shortcut: Alt+R
+                if (e.altKey && (e.key === 'r' || e.key === 'R') && this.isInteractive) {
                     e.preventDefault();
-                    if (!this.speechAvailable) return; // guard when unavailable
+                    if (!this.speechAvailable) return;
                     if (this.isRecording) {
                         window.electronAPI.stopSpeechRecognition();
                     } else {
                         window.electronAPI.startSpeechRecognition();
                     }
+                }
+
+                // Opacity shortcuts: Alt+] (increase), Alt+[ (decrease)
+                if (e.altKey && (e.key === ']' || e.key === '[')) {
+                    e.preventDefault();
+                    const delta = e.key === ']' ? 0.1 : -0.1;
+                    const slider = document.getElementById('opacitySlider');
+                    const cur = slider ? parseInt(slider.value, 10) / 100 : 1.0;
+                    const next = Math.max(0.1, Math.min(1.0, Math.round((cur + delta) * 10) / 10));
+                    if (slider) slider.value = Math.round(next * 100);
+                    if (window.electronAPI && window.electronAPI.setWindowOpacity) {
+                        window.electronAPI.setWindowOpacity(next);
+                    }
+                    if (window.electronAPI && window.electronAPI.saveSettings) {
+                        window.electronAPI.saveSettings({ windowOpacity: next });
+                    }
+                }
+
+                // Language cycling shortcut: Alt+L
+                if (e.altKey && (e.key === 'l' || e.key === 'L') && this.isInteractive) {
+                    e.preventDefault();
+                    if (this.languageCycler) this.languageCycler.click();
+                }
+
+                // Skill cycling shortcut: Alt+K
+                if (e.altKey && (e.key === 'k' || e.key === 'K') && this.isInteractive) {
+                    e.preventDefault();
+                    if (this.skillIndicator) this.skillIndicator.click();
                 }
             });
         }
@@ -1394,6 +1432,11 @@ class MainWindowUI {
     }
 
     showSettingsMenu() {
+        const existing = document.querySelector('.settings-menu');
+        if (existing && existing.parentElement) {
+            existing.parentElement.removeChild(existing);
+        }
+
         const menu = document.createElement('div');
         menu.className = 'settings-menu';
         menu.style.cssText = `
@@ -1411,7 +1454,7 @@ class MainWindowUI {
 
         const settingsOption = this.createMenuItem('Settings', 'fa-cog', () => {
             this.openSettings();
-            document.body.removeChild(menu);
+            if (menu.parentElement) menu.parentElement.removeChild(menu);
         });
 
         const quitOption = this.createMenuItem('Quit OpenCluely', 'fa-power-off', () => {
@@ -1426,12 +1469,14 @@ class MainWindowUI {
 
         // Add click outside listener to close menu
         const closeMenu = (e) => {
-            if (!menu.contains(e.target) && !this.settingsIndicator.contains(e.target)) {
-                document.body.removeChild(menu);
+            if (!menu.contains(e.target) && (!this.settingsIndicator || !this.settingsIndicator.contains(e.target))) {
+                if (menu.parentElement) menu.parentElement.removeChild(menu);
                 document.removeEventListener('click', closeMenu);
             }
         };
-        document.addEventListener('click', closeMenu);
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+        }, 10);
 
         document.body.appendChild(menu);
     }

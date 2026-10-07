@@ -1512,6 +1512,7 @@ class WindowManager {
   hideSettings() {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
+      try { settingsWindow.blur(); } catch (_) { }
       settingsWindow.hide();
     }
   }
@@ -1605,16 +1606,14 @@ class WindowManager {
     const { x: displayX, y: displayY, width: screenWidth, height: screenHeight } = display.workArea || display.workAreaSize;
     const [windowWidth, windowHeight] = window.getSize();
 
-    // Center horizontally but position at top
-    const topMargin = 20;
+    // Center horizontally and vertically so it never occludes the docked top toolbar
     const x = displayX + Math.round((screenWidth - windowWidth) / 2);
-    const y = displayY + topMargin;
+    const y = displayY + Math.max(0, Math.round((screenHeight - windowHeight) / 2));
 
     window.setPosition(x, y);
 
-    logger.debug('Positioned window at top-center', {
+    logger.debug('Positioned window at center', {
       position: `${x},${y}`,
-      topMargin,
       display: display.id || 'primary'
     });
   }

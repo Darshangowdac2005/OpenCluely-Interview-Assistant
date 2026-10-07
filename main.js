@@ -116,6 +116,7 @@ class ApplicationController {
     // Default to C++ so language is enforced from first run
     this.codingLanguage = "cpp";
     this.speechAvailable = false;
+    this.windowOpacity = 1.0;
 
     // Utterance coalescing: VAD emits a transcript per natural pause, but a
     // single spoken question can still arrive as a few fragments (mid-thought
@@ -435,6 +436,20 @@ class ApplicationController {
         windowManager.showAllWindows();
         windowManager.forceAlwaysOnTopForAllWindows();
       },
+      // ── Opacity / Brightness shortcuts ─────────────────────────────────────
+      "Alt+]": () => this.adjustOpacity(0.1),
+      "Alt+[": () => this.adjustOpacity(-0.1),
+      "CommandOrControl+Shift+]": () => this.adjustOpacity(0.1),
+      "CommandOrControl+Shift+[": () => this.adjustOpacity(-0.1),
+
+      // ── Language cycling shortcut ──────────────────────────────────────────
+      "Alt+L": () => this.cycleCodingLanguage(1),
+      "CommandOrControl+Shift+L": () => this.cycleCodingLanguage(1),
+
+      // ── Skill cycling shortcut ─────────────────────────────────────────────
+      "Alt+K": () => this.navigateSkill(1),
+      "CommandOrControl+Shift+K": () => this.navigateSkill(1),
+
       // Context-sensitive shortcuts based on interaction mode
       "CommandOrControl+Up": () => this.handleUpArrow(),
       "CommandOrControl+Down": () => this.handleDownArrow(),
@@ -1084,25 +1099,13 @@ class ApplicationController {
 
     // Overlay transparency control
     ipcMain.handle("set-window-opacity", (event, opacity) => {
-      const value = Math.max(0.1, Math.min(1.0, parseFloat(opacity) || 1.0));
-      const targetWindows = ['main', 'llmResponse', 'chat'];
-      targetWindows.forEach(type => {
-        const win = windowManager.getWindow(type);
-        if (win && !win.isDestroyed()) {
-          try { win.setOpacity(value); } catch (_) { }
-        }
-      });
-      logger.info('Window opacity set', { opacity: value });
-      return { success: true, opacity: value };
+      return this.setWindowOpacity(opacity);
     });
 
 
     // Handle close settings
     ipcMain.on("close-settings", () => {
-      const settingsWindow = windowManager.getWindow("settings");
-      if (settingsWindow) {
-        settingsWindow.hide();
-      }
+      windowManager.hideSettings();
     });
 
     // Handle save settings (synchronous)
@@ -1255,9 +1258,49 @@ class ApplicationController {
     windowManager.broadcastToAllWindows("skill-updated", { skill: newSkill });
   }
 
+  setWindowOpacity(opacity) {
+    const value = Math.max(0.1, Math.min(1.0, Math.round(parseFloat(opacity) * 100) / 100 || 1.0));
+    this.windowOpacity = value;
+    const targetWindows = ['main', 'llmResponse', 'chat'];
+    targetWindows.forEach(type => {
+      const win = windowManager.getWindow(type);
+      if (win && !win.isDestroyed()) {
+        try { win.setOpacity(value); } catch (_) { }
+      }
+    });
+    windowManager.broadcastToAllWindows('opacity-changed', { opacity: value });
+    logger.info('Window opacity set', { opacity: value });
+    return { success: true, opacity: value };
+  }
+
+  adjustOpacity(delta) {
+    const current = typeof this.windowOpacity === 'number' ? this.windowOpacity : 1.0;
+    const next = Math.max(0.1, Math.min(1.0, Math.round((current + delta) * 10) / 10));
+    this.setWindowOpacity(next);
+    return next;
+  }
+
+  cycleCodingLanguage(direction = 1) {
+    const availableLanguages = ['cpp', 'c', 'python', 'java', 'javascript'];
+    let idx = availableLanguages.indexOf(this.codingLanguage);
+    if (idx === -1) idx = 0;
+    let nextIdx = (idx + direction) % availableLanguages.length;
+    if (nextIdx < 0) nextIdx = availableLanguages.length - 1;
+    const newLang = availableLanguages[nextIdx];
+    this.codingLanguage = newLang;
+    windowManager.broadcastToAllWindows('coding-language-changed', { language: newLang });
+    logger.info('Coding language cycled via shortcut', { language: newLang });
+    return newLang;
+  }
+
   async triggerScreenshotOCR() {
     if (!this.isReady) {
       logger.warn("Screenshot requested before application ready");
+      return;
+    }
+
+    if (captureService.isProcessing) {
+      logger.warn("Screenshot capture already in progress, ignoring duplicate trigger");
       return;
     }
 
@@ -1789,6 +1832,7 @@ class ApplicationController {
       appIcon: this.appIcon || "terminal",
       selectedIcon: this.appIcon || "terminal",
       windowGap: windowManager.windowGap,
+      windowOpacity: this.windowOpacity !== undefined ? this.windowOpacity : 1.0,
 
       speechProvider: speechService.provider || "whisper",
       azureKey: process.env.AZURE_SPEECH_KEY || "",
@@ -1833,6 +1877,10 @@ class ApplicationController {
       if (settings.windowGap !== undefined) {
         const gap = Number(settings.windowGap);
         if (Number.isFinite(gap)) windowManager.setWindowGap(gap);
+      }
+      if (settings.windowOpacity !== undefined) {
+        const op = parseFloat(settings.windowOpacity);
+        if (Number.isFinite(op)) this.windowOpacity = Math.max(0.1, Math.min(1.0, op));
       }
 
       // ── Persist provider / API-key fields back to .env ──

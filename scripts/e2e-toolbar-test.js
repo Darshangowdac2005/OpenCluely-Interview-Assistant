@@ -8,8 +8,14 @@ let ipcCalls = {
   stopSpeech: 0,
   saveSettings: [],
   updateActiveSkill: [],
-  moveWindow: []
+  moveWindow: [],
+  setWindowOpacity: []
 };
+
+ipcMain.handle('set-window-opacity', (_event, opacity) => {
+  ipcCalls.setWindowOpacity.push(opacity);
+  return { success: true, opacity };
+});
 
 // Setup mock IPC responders before window loads
 ipcMain.handle('take-screenshot', () => {
@@ -72,6 +78,9 @@ async function runTests() {
   console.log('   E2E TOOLBAR & FOCUS TEST SUITE       ');
   console.log('========================================\n');
 
+  // Exercise the visible toolbar without activating its window.
+  testWindow.showInactive();
+
   let passed = 0;
   let failed = 0;
 
@@ -87,6 +96,7 @@ async function runTests() {
 
   // TEST 1: Window Stealth & Focusability Properties
   console.log('\n-- Test Group 1: Window Attributes & Fullscreen Protection --');
+  assert(testWindow.isVisible() === true, 'Main toolbar is visible during focus checks');
   assert(testWindow.isFocusable() === false, 'Main window is non-focusable (focusable: false)');
   assert(testWindow.isAlwaysOnTop() === true, 'Main window is always-on-top');
   assert(testWindow.isFullScreenable() === false, 'Main window is not fullscreenable');
@@ -180,8 +190,8 @@ async function runTests() {
   await testWindow.webContents.executeJavaScript(`
     (() => {
       const tab = document.querySelector('.command-tab');
-      tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, screenX: 100, screenY: 100, button: 0, pointerId: 2 }));
-      tab.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, screenX: 120, screenY: 130, button: 0, pointerId: 2 }));
+      tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, screenX: 100, screenY: 100, button: 0, buttons: 1, pointerId: 2 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, screenX: 120, screenY: 130, button: 0, buttons: 1, pointerId: 2 }));
     })()
   `);
   await new Promise(r => setTimeout(r, 50));
@@ -191,7 +201,7 @@ async function runTests() {
   const releaseTest = await testWindow.webContents.executeJavaScript(`
     (() => {
       const tab = document.querySelector('.command-tab');
-      tab.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, screenX: 120, screenY: 130, button: 0, pointerId: 2 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, screenX: 120, screenY: 130, button: 0, buttons: 0, pointerId: 2 }));
       return {
         hasCap: tab.hasPointerCapture ? tab.hasPointerCapture(2) : false,
         cursor: tab.style.cursor
@@ -251,7 +261,60 @@ async function runTests() {
 
   // TEST 6: Verify Focus & Non-Activation In Fullscreen
   console.log('\n-- Test Group 6: Fullscreen / No-Activation Integrity --');
-  assert(testWindow.isFocused() === false, 'Main window did not steal focus during button clicks');
+  assert(testWindow.isVisible() === true, 'Main toolbar remains visible after button and drag actions');
+  assert(testWindow.isFocusable() === false, 'Main toolbar remains non-focusable after button and drag actions');
+  assert(testWindow.isFocused() === false, 'Visible main toolbar did not take OS focus during button clicks');
+
+  // TEST 7: Keyboard Shortcuts For Opacity, Language, and Skill
+  console.log('\n-- Test Group 7: Keyboard Shortcuts (Opacity, Language, Skill) --');
+
+  // Test Alt+[ decreases opacity
+  const prevOpacityCalls = ipcCalls.setWindowOpacity.length;
+  await testWindow.webContents.executeJavaScript(`
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '[', altKey: true, bubbles: true }));
+  `);
+  await new Promise(r => setTimeout(r, 100));
+  const sliderAfterDim = await testWindow.webContents.executeJavaScript(`
+    document.getElementById('opacitySlider').value
+  `);
+  assert(ipcCalls.setWindowOpacity.length > prevOpacityCalls, 'Alt+[ triggers setWindowOpacity IPC');
+  assert(Number(sliderAfterDim) <= 90, `Alt+[ dims opacity slider to ${sliderAfterDim}%`);
+
+  // Test Alt+] increases opacity
+  await testWindow.webContents.executeJavaScript(`
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ']', altKey: true, bubbles: true }));
+  `);
+  await new Promise(r => setTimeout(r, 100));
+  const sliderAfterBright = await testWindow.webContents.executeJavaScript(`
+    document.getElementById('opacitySlider').value
+  `);
+  assert(Number(sliderAfterBright) >= 95, `Alt+] brightens opacity slider back to ${sliderAfterBright}%`);
+
+  // Test Alt+L cycles language
+  const langBeforeShortcut = await testWindow.webContents.executeJavaScript(`
+    document.getElementById('codingLanguage').textContent.trim()
+  `);
+  await testWindow.webContents.executeJavaScript(`
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, bubbles: true }));
+  `);
+  await new Promise(r => setTimeout(r, 100));
+  const langAfterShortcut = await testWindow.webContents.executeJavaScript(`
+    document.getElementById('codingLanguage').textContent.trim()
+  `);
+  assert(langAfterShortcut !== langBeforeShortcut, `Alt+L cycles coding language from ${langBeforeShortcut} to ${langAfterShortcut}`);
+
+  // Test Alt+K cycles skill
+  const skillBeforeShortcut = await testWindow.webContents.executeJavaScript(`
+    window.mainWindowUI.currentSkill
+  `);
+  await testWindow.webContents.executeJavaScript(`
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', altKey: true, bubbles: true }));
+  `);
+  await new Promise(r => setTimeout(r, 100));
+  const skillAfterShortcut = await testWindow.webContents.executeJavaScript(`
+    window.mainWindowUI.currentSkill
+  `);
+  assert(skillAfterShortcut !== skillBeforeShortcut, `Alt+K cycles skill from ${skillBeforeShortcut} to ${skillAfterShortcut}`);
 
   console.log('\n========================================');
   console.log(`  SUMMARY: ${passed} PASSED, ${failed} FAILED`);

@@ -120,6 +120,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
+  onOpacityChanged: (callback) => ipcRenderer.on('opacity-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
 
   // Generic receive method
