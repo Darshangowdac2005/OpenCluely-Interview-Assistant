@@ -324,6 +324,16 @@ class MainWindowUI {
         });
         this.screenshotButton.addEventListener('pointerup', () => this.resetToolbarActionLocks());
 
+        // Right-click on camera button = instant emergency unlock / reset
+        this.screenshotButton.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (window.electronAPI && window.electronAPI.resetCaptureLocks) {
+                window.electronAPI.resetCaptureLocks();
+            } else {
+                this.handleCaptureLockReset();
+            }
+        });
+
         // Skill indicator click handler — cycles to next skill
         this.skillIndicator.addEventListener('click', () => {
             if (!this.isInteractive) return;
@@ -746,7 +756,25 @@ class MainWindowUI {
                     e.preventDefault();
                     if (this.screenshotButton) this.screenshotButton.click();
                 }
+
+                // Emergency capture reset shortcuts fallback: Ctrl/Cmd + Alt + S or Ctrl/Cmd + Shift + R
+                if (((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 's' || e.key === 'S')) ||
+                    ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'r' || e.key === 'R'))) {
+                    e.preventDefault();
+                    if (window.electronAPI && window.electronAPI.resetCaptureLocks) {
+                        window.electronAPI.resetCaptureLocks();
+                    } else {
+                        this.handleCaptureLockReset();
+                    }
+                }
             });
+
+            // Listen for emergency capture lock reset broadcast from main process
+            if (window.electronAPI.onCaptureLockReset) {
+                window.electronAPI.onCaptureLockReset(() => {
+                    this.handleCaptureLockReset();
+                });
+            }
         }
 
         // Also listen via the api interface for backup
@@ -848,6 +876,20 @@ class MainWindowUI {
             // Alt+A is handled globally by the main process
             // No need to handle it here since it needs to work even when windows are non-interactive
         });
+    }
+
+    handleCaptureLockReset() {
+        this.resetToolbarActionLocks();
+        logger.info('Capture lock reset: toolbar action locks cleared', {
+            component: 'MainWindowUI'
+        });
+        if (this.screenshotButton) {
+            // Flash active green to indicate unlocked state
+            this.screenshotButton.classList.add('active');
+            setTimeout(() => {
+                if (this.screenshotButton) this.screenshotButton.classList.remove('active');
+            }, 600);
+        }
     }
 
     handleInteractionModeChanged(interactive) {

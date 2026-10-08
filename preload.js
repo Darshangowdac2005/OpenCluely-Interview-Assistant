@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // Screenshot and OCR
   takeScreenshot: () => ipcRenderer.invoke('take-screenshot'),
+  resetCaptureLocks: () => ipcRenderer.invoke('reset-capture-locks'),
 
   // Speech recognition
   startSpeechRecognition: () => ipcRenderer.invoke('start-speech-recognition'),
@@ -123,6 +124,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onOpacityChanged: (callback) => ipcRenderer.on('opacity-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onCaptureLockReset: (callback) => ipcRenderer.on('capture-lock-reset', callback),
 
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

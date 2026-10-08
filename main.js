@@ -418,6 +418,9 @@ class ApplicationController {
   setupGlobalShortcuts() {
     const shortcuts = {
       "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
+      // ── Capture reset shortcuts (emergency unlock) ────────────────────────
+      "CommandOrControl+Alt+S": () => this.forceResetCaptureLocks(),
+      "CommandOrControl+Shift+R": () => this.forceResetCaptureLocks(),
       "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
       "CommandOrControl+Shift+X": () => windowManager.toggleLLMResponse(),
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
@@ -504,6 +507,10 @@ class ApplicationController {
           label: '👁  Toggle visibility',
           click: () => windowManager.toggleVisibility(),
         },
+        {
+          label: '🔄 Reset Capture / Unlock (Ctrl+Alt+S)',
+          click: () => this.forceResetCaptureLocks(),
+        },
         { type: 'separator' },
         {
           label: 'Quit OpenCluely',
@@ -569,6 +576,7 @@ class ApplicationController {
       });
       return { success: true };
     });
+    ipcMain.handle("reset-capture-locks", () => this.forceResetCaptureLocks());
     ipcMain.handle("list-displays", () => captureService.listDisplays());
     ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
 
@@ -1410,6 +1418,19 @@ class ApplicationController {
       this._isOcrProcessing = false;
       this._ocrStartTime = 0;
     }
+  }
+
+  forceResetCaptureLocks() {
+    logger.warn('Emergency capture lock reset triggered');
+    try {
+      captureService.isProcessing = false;
+      captureService._processingStartTime = 0;
+    } catch (_) {}
+    this._isOcrProcessing = false;
+    this._ocrStartTime = 0;
+    windowManager.hideLLMResponse();
+    windowManager.broadcastToAllWindows('capture-lock-reset', { timestamp: Date.now() });
+    return { success: true };
   }
 
   async processWithLLM(text, sessionHistory) {
