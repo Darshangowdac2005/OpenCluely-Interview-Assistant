@@ -633,6 +633,16 @@
                     showLoadingState();
                 });
 
+                // Clear content when window is parked offscreen (Windows pre-shown mode)
+                if (window.electronAPI.onClearContent) {
+                    window.electronAPI.onClearContent(() => {
+                        console.log('[LLM-RESPONSE] clear-content received');
+                        hideLoadingState();
+                        const contentDiv = document.getElementById('llm-content');
+                        if (contentDiv) contentDiv.innerHTML = '';
+                    });
+                }
+
                 // Listen for LLM response
                 window.electronAPI.onDisplayLlmResponse(function () {
                     console.log('[LLM-RESPONSE] ===== display-llm-response received! =====');

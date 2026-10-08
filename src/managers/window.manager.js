@@ -256,7 +256,20 @@ class WindowManager {
       }
     });
 
-    window.hide();
+    // CRITICAL: Pre-show the window at startup so the Windows Shell Hook
+    // (WM_SHOWWINDOW → HSHELL_WINDOWCREATED) fires NOW, not during an exam.
+    // The window is transparent with no content, so it's invisible to the user.
+    // We park it offscreen so it occupies no visible area.
+    // After this, we never need to call showInactive() again — we just
+    // reposition it on-screen when content arrives.
+    if (process.platform === 'win32') {
+      window.setPosition(-10000, -10000);
+      window.showInactive();
+      this._llmWindowPreShown = true;
+      logger.debug('LLM response window pre-shown offscreen for Windows shell hook registration');
+    } else {
+      window.hide();
+    }
     return window;
   }
 
@@ -671,6 +684,11 @@ class WindowManager {
     const enforceAlwaysOnTop = () => {
       if (!window.isDestroyed()) {
         try {
+          // On Windows, skip enforcement if the window is already alwaysOnTop
+          // to avoid sending redundant SetWindowPos/WM_WINDOWPOSCHANGED messages
+          // that poke explorer.exe and can surface the taskbar.
+          if (process.platform === 'win32' && window.isAlwaysOnTop()) return;
+
           if (process.platform === 'darwin') {
             // Try multiple levels on macOS
             window.setAlwaysOnTop(true, 'floating', 1);
@@ -712,35 +730,36 @@ class WindowManager {
 
     window.on('focus', () => {
       // Settings and onboarding have text inputs (e.g. API keys) that require focus.
-      // Overlay windows (main and llmResponse) must NEVER keep OS focus; they must
-      // immediately yield focus back so fullscreen apps (HackerEarth, Unstop, F11)
-      // do not exit fullscreen mode or trigger proctoring violations.
       if (type === 'settings' || type === 'onboarding') return;
 
-      // Belt-and-suspenders: if the overlay ever receives OS focus (shouldn't
-      // happen with focusable:false), immediately release it so the exam
-      // browser window stays in the foreground. This prevents SafeExam Browser
-      // and proctoring tools from detecting a focus change.
-      if (!window.isDestroyed()) {
-        window.blur();
-        logger.debug('Overlay focus released back to exam browser', { type });
-      }
-      setTimeout(enforceAlwaysOnTop, 50);
+      // Overlay windows are created with focusable:false so this should rarely fire.
+      // IMPORTANT: Do NOT call window.blur() here — on Windows, blur() sends a
+      // WA_INACTIVE deactivation to explorer.exe which surfaces the taskbar.
+      // Since focusable:false already prevents keyboard focus, the focus event
+      // here is harmless and will resolve itself on the next user interaction.
+      logger.debug('Overlay received unexpected focus event (no-op, focusable:false handles it)', { type });
     });
 
     window.on('restore', () => {
       setTimeout(enforceAlwaysOnTop, 50);
     });
 
-    // Periodic enforcement every 1 second for fast recovery when
-    // fullscreen apps (HackerEarth, Unstop, browser F11) grab the top Z-level.
+    // Periodic enforcement for fast recovery when fullscreen apps grab the
+    // top Z-level. Only enforce for visible overlay windows (main, llmResponse)
+    // to avoid poking DWM/explorer with SetWindowPos on hidden background
+    // windows like settings and chat.
+    const isOverlay = (type === 'main' || type === 'llmResponse');
     const periodicEnforcement = setInterval(() => {
       if (window.isDestroyed()) {
         clearInterval(periodicEnforcement);
         return;
       }
-      enforceAlwaysOnTop();
-    }, 1000);
+      // Only enforce on overlay windows, and only when they are visible.
+      // Hidden/offscreen windows don't need Z-order maintenance.
+      if (isOverlay && window.isVisible()) {
+        enforceAlwaysOnTop();
+      }
+    }, isOverlay ? 2000 : 10000);
 
     logger.debug('Applied enhanced stealth measures with aggressive always-on-top', {
       type,
@@ -944,7 +963,11 @@ class WindowManager {
         }
       };
       applyWinTop();
-      // Only call showInactive if not already visible to avoid waking Windows Shell/Taskbar
+      // On Windows, avoid calling showInactive() on already-visible windows
+      // because ShowWindow(SW_SHOWNOACTIVATE) sends WM_SHOWWINDOW to the
+      // shell hook which pokes explorer.exe and can surface the taskbar.
+      // For pre-shown LLM windows, the window is already visible (offscreen),
+      // so we skip showInactive entirely and just reposition it.
       if (!win.isVisible()) {
         win.showInactive();
       }
@@ -953,7 +976,10 @@ class WindowManager {
         if (process.platform === 'linux' && !isLLM) {
           win.setVisibleOnAllWorkspaces(false);
         }
-        applyWinTop();
+        // Only re-apply Z-order if it was lost (avoid redundant SetWindowPos)
+        if (!win.isAlwaysOnTop()) {
+          applyWinTop();
+        }
       }, 500);
     }
 
@@ -1405,13 +1431,26 @@ class WindowManager {
     }
 
     logger.debug('Showing LLM window without stealing focus');
-    if (!llmWindow.isVisible()) {
+    // On Windows, the LLM window was pre-shown at startup (offscreen) to
+    // avoid triggering the shell hook during exam time. We just need to
+    // reposition it on-screen — no showInactive() needed.
+    if (this._llmWindowPreShown) {
+      // Window is already 'shown' from Win32's perspective; just position it
+      if (this.bindWindows) {
+        this.positionBoundWindows();
+      } else {
+        this.centerWindow(llmWindow);
+      }
+    } else if (!llmWindow.isVisible()) {
       this.showOnCurrentDesktop(llmWindow);
-    }
-
-    // Position bound windows when LLM response is shown
-    if (this.bindWindows) {
-      this.positionBoundWindows();
+      if (this.bindWindows) {
+        this.positionBoundWindows();
+      }
+    } else {
+      // Already visible, just reposition
+      if (this.bindWindows) {
+        this.positionBoundWindows();
+      }
     }
 
     logger.info('LLM response displayed', {
@@ -1440,13 +1479,24 @@ class WindowManager {
       try { llmWindow.setMovable(true); } catch (_) { }
 
       llmWindow.webContents.send('show-loading');
-      if (!llmWindow.isVisible()) {
-        this.showOnCurrentDesktop(llmWindow);
-      }
 
-      // Position bound windows when LLM loading is shown
-      if (this.bindWindows) {
-        this.positionBoundWindows();
+      // On Windows, the LLM window was pre-shown at startup (offscreen).
+      // Just reposition it on-screen — no showInactive() needed.
+      if (this._llmWindowPreShown) {
+        if (this.bindWindows) {
+          this.positionBoundWindows();
+        } else {
+          this.centerWindow(llmWindow);
+        }
+      } else if (!llmWindow.isVisible()) {
+        this.showOnCurrentDesktop(llmWindow);
+        if (this.bindWindows) {
+          this.positionBoundWindows();
+        }
+      } else {
+        if (this.bindWindows) {
+          this.positionBoundWindows();
+        }
       }
 
       logger.debug('LLM loading window shown');
@@ -1457,8 +1507,18 @@ class WindowManager {
 
   hideLLMResponse() {
     const llmWindow = this.windows.get('llmResponse');
-    if (llmWindow) {
-      llmWindow.hide();
+    if (llmWindow && !llmWindow.isDestroyed()) {
+      if (this._llmWindowPreShown) {
+        // On Windows, don't call hide() — that would require another
+        // showInactive() later which triggers the shell hook again.
+        // Instead, park the window offscreen so it's invisible but
+        // still 'shown' from Win32's perspective.
+        llmWindow.setPosition(-10000, -10000);
+        llmWindow.webContents.send('clear-content');
+        logger.debug('LLM window parked offscreen (pre-shown mode)');
+      } else {
+        llmWindow.hide();
+      }
     }
   }
 
@@ -1470,6 +1530,26 @@ class WindowManager {
     const llmWindow = this.windows.get('llmResponse');
     if (!llmWindow || llmWindow.isDestroyed()) {
       return false;
+    }
+
+    if (this._llmWindowPreShown) {
+      // In pre-shown mode, check position instead of visibility
+      const [x] = llmWindow.getPosition();
+      if (x > -5000) {
+        // Currently on-screen — park it offscreen
+        this.llmUserHidden = true;
+        llmWindow.setPosition(-10000, -10000);
+        return false;
+      } else {
+        // Currently offscreen — bring it back
+        this.llmUserHidden = false;
+        if (this.bindWindows) {
+          this.positionBoundWindows();
+        } else {
+          this.centerWindow(llmWindow);
+        }
+        return true;
+      }
     }
 
     if (llmWindow.isVisible()) {
