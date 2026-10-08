@@ -4,6 +4,7 @@ const logger = require('../core/logger').createServiceLogger('CAPTURE');
 class CaptureService {
   constructor() {
     this.isProcessing = false;
+    this._processingStartTime = 0;
   }
 
   listDisplays() {
@@ -28,8 +29,18 @@ class CaptureService {
    * options: { displayId?: number, area?: { x, y, width, height } }
    */
   async captureAndProcess(options = {}) {
-    if (this.isProcessing) throw new Error('Capture already in progress');
+    if (this.isProcessing) {
+      // Auto-recover if lock has been held for longer than 8 seconds (deadlock prevention)
+      if (Date.now() - this._processingStartTime > 8000) {
+        logger.warn('CaptureService was stuck in processing state for >8s; force-releasing lock');
+        this.isProcessing = false;
+      } else {
+        throw new Error('Capture already in progress');
+      }
+    }
+
     this.isProcessing = true;
+    this._processingStartTime = Date.now();
     const startTime = Date.now();
     try {
       const { image, metadata } = await this.captureScreenshot(options);
@@ -61,6 +72,7 @@ class CaptureService {
       };
     } finally {
       this.isProcessing = false;
+      this._processingStartTime = 0;
     }
   }
 
@@ -68,10 +80,26 @@ class CaptureService {
     const targetDisplay = this._getTargetDisplay(options.displayId);
     const { width, height } = targetDisplay.size || { width: 1920, height: 1080 };
 
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width, height }
+    // Timeout guard: desktopCapturer.getSources can hang in Chromium on Windows
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('desktopCapturer.getSources timed out after 6000ms'));
+      }, 6000);
     });
+
+    let sources;
+    try {
+      sources = await Promise.race([
+        desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: { width, height }
+        }),
+        timeoutPromise
+      ]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (sources.length === 0) {
       throw new Error('No screen sources available for capture');

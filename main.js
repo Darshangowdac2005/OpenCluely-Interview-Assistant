@@ -561,7 +561,14 @@ class ApplicationController {
   }
 
   setupIPCHandlers() {
-    ipcMain.handle("take-screenshot", () => this.triggerScreenshotOCR());
+    ipcMain.handle("take-screenshot", async () => {
+      // Launch triggerScreenshotOCR asynchronously so the renderer does not block
+      // for 20-30s while LLM is generating. UI stays completely responsive.
+      this.triggerScreenshotOCR().catch((err) => {
+        logger.error("triggerScreenshotOCR error in IPC handler", { error: err && err.message });
+      });
+      return { success: true };
+    });
     ipcMain.handle("list-displays", () => captureService.listDisplays());
     ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
 
@@ -1314,6 +1321,18 @@ class ApplicationController {
       return;
     }
 
+    if (this._isOcrProcessing) {
+      if (Date.now() - (this._ocrStartTime || 0) > 35000) {
+        logger.warn("Previous OCR run timed out (>35s), resetting lock and proceeding");
+        this._isOcrProcessing = false;
+      } else {
+        logger.warn("Screenshot OCR/LLM analysis already in progress, ignoring duplicate trigger");
+        return;
+      }
+    }
+
+    this._isOcrProcessing = true;
+    this._ocrStartTime = Date.now();
     const startTime = Date.now();
 
     try {
@@ -1387,6 +1406,9 @@ class ApplicationController {
           error: error.message
         }
       });
+    } finally {
+      this._isOcrProcessing = false;
+      this._ocrStartTime = 0;
     }
   }
 

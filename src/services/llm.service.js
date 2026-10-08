@@ -1139,10 +1139,12 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
 
   _streamRequestForModel(geminiRequest, modelName, apiKey, onDelta) {
     const https = require('https');
-    const timeout = config.get('llm.gemini.timeout');
+    const timeout = config.get('llm.gemini.timeout') || 25000;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse`;
     const postData = JSON.stringify(geminiRequest);
-    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    if (!this._sharedHttpsAgent) {
+      this._sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 4, timeout: 30000 });
+    }
 
     const options = {
       method: 'POST',
@@ -1153,15 +1155,41 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
         'User-Agent': this.getUserAgent()
       },
       timeout,
-      agent
+      agent: this._sharedHttpsAgent
     };
 
     return new Promise((resolve, reject) => {
+      let isSettled = false;
+      const totalTimeoutMs = timeout + 15000; // Total hard cap including all chunks
+      const totalTimer = setTimeout(() => {
+        if (!isSettled) {
+          isSettled = true;
+          try { req.destroy(); } catch (_) {}
+          reject(new Error(`Streaming request total timeout after ${totalTimeoutMs}ms`));
+        }
+      }, totalTimeoutMs);
+
+      const cleanupAndReject = (err) => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(totalTimer);
+          reject(err);
+        }
+      };
+
+      const cleanupAndResolve = (val) => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(totalTimer);
+          resolve(val);
+        }
+      };
+
       const req = https.request(url, options, (res) => {
         if (res.statusCode !== 200) {
           let errBody = '';
           res.on('data', (c) => { errBody += c; });
-          res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errBody}`)));
+          res.on('end', () => cleanupAndReject(new Error(`HTTP ${res.statusCode}: ${errBody}`)));
           return;
         }
 
@@ -1198,14 +1226,14 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
           }
         });
 
-        res.on('end', () => resolve(fullText.trim()));
-        res.on('error', (error) => reject(new Error(`Streaming response error: ${error.message}`)));
+        res.on('end', () => cleanupAndResolve(fullText.trim()));
+        res.on('error', (error) => cleanupAndReject(new Error(`Streaming response error: ${error.message}`)));
       });
 
-      req.on('error', (error) => reject(new Error(`Streaming request failed: ${error.message}`)));
+      req.on('error', (error) => cleanupAndReject(new Error(`Streaming request failed: ${error.message}`)));
       req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Streaming request timeout'));
+        try { req.destroy(); } catch (_) {}
+        cleanupAndReject(new Error('Streaming request socket timeout'));
       });
 
       req.write(postData);

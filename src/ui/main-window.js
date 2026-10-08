@@ -301,12 +301,24 @@ class MainWindowUI {
             if (this._captureActionPending) return; // prevent double-fire
             if (window.electronAPI && window.electronAPI.takeScreenshot) {
                 this._captureActionPending = true;
+                // Immediate visual pulse feedback
+                this.screenshotButton.classList.add('active');
+                setTimeout(() => {
+                    if (this.screenshotButton) this.screenshotButton.classList.remove('active');
+                }, 500);
+
+                // Auto-safety timer: ensure flag is always cleared even if IPC hangs
+                const safetyTimer = setTimeout(() => {
+                    this._captureActionPending = false;
+                }, 2000);
+
                 try {
                     await window.electronAPI.takeScreenshot();
                 } catch (err) {
                     logger.error('takeScreenshot failed', { error: err && err.message });
                 } finally {
-                    setTimeout(() => { this._captureActionPending = false; }, 800);
+                    clearTimeout(safetyTimer);
+                    setTimeout(() => { this._captureActionPending = false; }, 600);
                 }
             }
         });
@@ -727,6 +739,12 @@ class MainWindowUI {
                 if (e.altKey && (e.key === 'k' || e.key === 'K') && this.isInteractive) {
                     e.preventDefault();
                     if (this.skillIndicator) this.skillIndicator.click();
+                }
+
+                // Screenshot shortcut fallback: Ctrl/Cmd + Shift + S
+                if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    if (this.screenshotButton) this.screenshotButton.click();
                 }
             });
         }
