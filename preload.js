@@ -43,6 +43,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
+  // Resume, Candidate Profile & Interview Context (Company & JD)
+  getResume: () => ipcRenderer.invoke('get-resume'),
+  saveResume: (textOrData, fileName = '', company = '', jobDescription = '') => {
+    if (typeof textOrData === 'object' && textOrData !== null) {
+      return ipcRenderer.invoke('save-resume', textOrData);
+    }
+    return ipcRenderer.invoke('save-resume', { text: textOrData, fileName, company, jobDescription });
+  },
+  saveProfile: (payload) => ipcRenderer.invoke('save-resume', payload),
+  parseResumeFile: (fileData) => ipcRenderer.invoke('parse-resume-file', fileData),
+  clearResume: () => ipcRenderer.invoke('clear-resume'),
+  clearProfile: () => ipcRenderer.invoke('clear-profile'),
+
   // First-run onboarding
   getFirstRunStatus: () => ipcRenderer.invoke('get-first-run-status'),
   completeFirstRun: () => ipcRenderer.invoke('complete-first-run'),

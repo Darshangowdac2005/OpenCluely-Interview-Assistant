@@ -271,6 +271,153 @@
         .settings-note code {
             color: rgba(255, 255, 255, 0.9);
         }
+
+        /* Resume Section Styling */
+        .resume-dropzone {
+            border: 1.5px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.25s ease;
+            cursor: pointer;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .resume-dropzone:hover,
+        .resume-dropzone.dragover {
+            border-color: rgba(96, 165, 250, 0.6);
+            background: rgba(96, 165, 250, 0.08);
+        }
+
+        .resume-dropzone i {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .resume-dropzone-text {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 500;
+        }
+
+        .resume-dropzone-hint {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 4px;
+        }
+
+        .resume-textarea-container {
+            position: relative;
+            margin-top: 8px;
+        }
+
+        .resume-textarea {
+            width: 100%;
+            height: 140px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: inherit;
+            font-size: 11px;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .resume-textarea:focus {
+            border-color: rgba(96, 165, 250, 0.5);
+            box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
+        }
+
+        .resume-actions-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+
+        .resume-status-text {
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .resume-status-text.active {
+            color: #34d399;
+        }
+
+        .btn-success {
+            background: rgba(16, 185, 129, 0.8);
+        }
+
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 1);
+        }
+
+        /* Context Fields Styling */
+        .context-field {
+            margin-bottom: 14px;
+        }
+
+        .context-field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .context-field-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.85);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .context-field-label i {
+            font-size: 11px;
+            color: rgba(96, 165, 250, 0.85);
+        }
+
+        .context-field-counter {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.45);
+        }
+
+        .context-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 12px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .context-input:focus {
+            border-color: rgba(96, 165, 250, 0.5);
+            box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
+        }
+
+        .context-hint {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 4px;
+            line-height: 1.3;
+        }
     </style>
 </head>
 
@@ -485,6 +632,85 @@
                         </div>
                         <input type="password" class="input-field" id="geminiKey"
                             placeholder="Enter your Google API key">
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <i class="fas fa-briefcase"></i>
+                    Interview Context: Profile, Company & JD
+                </div>
+                <div class="settings-section-content">
+                    <div style="font-size: 11px; color: rgba(255, 255, 255, 0.6); margin-bottom: 14px; line-height: 1.45;">
+                        Personalize AI responses with your target company, job description, and resume. In <strong>General / HR interview mode</strong>, behavioral, situational, and project answers (STAR method) will directly reflect your background and align with the company's culture and role requirements.
+                    </div>
+
+                    <!-- Target Company Field -->
+                    <div class="context-field">
+                        <div class="context-field-header">
+                            <span class="context-field-label">
+                                <i class="fas fa-building"></i> Target Company / Organization
+                            </span>
+                            <span id="companyCharCount" class="context-field-counter">0 / 200</span>
+                        </div>
+                        <input type="text" class="context-input" id="targetCompany" maxlength="200"
+                            placeholder="e.g. Google, Amazon, Flipkart, GE Vernova, Stripe...">
+                        <div class="context-hint">Enables company-specific culture, mission, and technical domain alignment.</div>
+                    </div>
+
+                    <!-- Job Description (JD) Field -->
+                    <div class="context-field">
+                        <div class="context-field-header">
+                            <span class="context-field-label">
+                                <i class="fas fa-clipboard-list"></i> Job Description (JD) / Role Requirements
+                            </span>
+                            <span id="jdCharCount" class="context-field-counter">0 chars (~0 tokens)</span>
+                        </div>
+                        <textarea class="resume-textarea" id="jobDescriptionText" style="height: 105px;"
+                            placeholder="Paste the role title, requirements, desired tech stack, or responsibilities here..."></textarea>
+                        <div class="context-hint">AI answers will prioritize accomplishments directly matching these key responsibilities.</div>
+                    </div>
+
+                    <!-- Resume Section Header & Dropzone -->
+                    <div class="context-field" style="margin-bottom: 8px;">
+                        <div class="context-field-header">
+                            <span class="context-field-label">
+                                <i class="fas fa-file-lines"></i> Candidate Resume & Experience
+                            </span>
+                        </div>
+
+                        <!-- Dropzone -->
+                        <div class="resume-dropzone" id="resumeDropzone">
+                            <i class="fas fa-cloud-arrow-up"></i>
+                            <div class="resume-dropzone-text" id="resumeDropzoneText">Click or Drag & Drop Resume (.pdf, .txt, .md)</div>
+                            <div class="resume-dropzone-hint">Text is extracted locally — no third-party upload</div>
+                            <input type="file" id="resumeFileInput" accept=".pdf,.txt,.md,text/plain" style="display: none;">
+                        </div>
+
+                        <!-- Editable Resume Text Area -->
+                        <div class="resume-textarea-container">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.8);">Extracted / Custom Profile Details</span>
+                                <span id="resumeCharCount" class="context-field-counter">0 chars (~0 tokens)</span>
+                            </div>
+                            <textarea class="resume-textarea" id="resumeText" placeholder="Upload a resume above or paste your projects, skills, and past achievements here. You can freely edit and fine-tune this text anytime..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Actions Bar -->
+                    <div class="resume-actions-bar">
+                        <div class="resume-status-text" id="resumeStatusInfo">
+                            <i class="fas fa-circle-info"></i> No interview context loaded
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-danger" id="clearResumeBtn" style="display: none;">
+                                <i class="fas fa-trash"></i> Clear All
+                            </button>
+                            <button type="button" class="btn btn-success" id="saveResumeBtn">
+                                <i class="fas fa-floppy-disk"></i> Save Context
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

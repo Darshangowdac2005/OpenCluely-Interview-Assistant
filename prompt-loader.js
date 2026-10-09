@@ -68,6 +68,33 @@ class PromptLoader {
       promptContent = this.injectProgrammingLanguage(promptContent, programmingLanguage, normalizedSkillName);
     }
 
+    // Inject candidate resume / profile / company / JD exclusively for General (Behavioral / HR / Situational) skill
+    if (normalizedSkillName === 'general') {
+      try {
+        const resumeService = require('./src/services/resume.service');
+        const resumeContext = resumeService.getPromptContext();
+        if (resumeContext) {
+          promptContent += resumeContext;
+        }
+      } catch (_) {
+        // Fallback silently if resume service not yet initialized
+      }
+    }
+
+    // Inject target company context into DSA if set
+    if (normalizedSkillName === 'dsa') {
+      try {
+        const resumeService = require('./src/services/resume.service');
+        const profile = resumeService.getResume();
+        if (profile && profile.company && profile.company.trim()) {
+          promptContent += `\n\n## TARGET COMPANY CONTEXT: ${profile.company.trim().toUpperCase()}
+- Write clean, production-grade, and optimal code with thorough edge-case analysis matching the rigorous technical hiring bar at ${profile.company.trim()}.`;
+        }
+      } catch (_) {
+        // Fallback silently if resume service not yet initialized
+      }
+    }
+
     return promptContent;
   }
 

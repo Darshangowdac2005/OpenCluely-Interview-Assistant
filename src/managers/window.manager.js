@@ -1436,6 +1436,9 @@ class WindowManager {
     // reposition it on-screen — no showInactive() needed.
     if (this._llmWindowPreShown) {
       // Window is already 'shown' from Win32's perspective; just position it
+      if (!llmWindow.isVisible()) {
+        this.showOnCurrentDesktop(llmWindow);
+      }
       if (this.bindWindows) {
         this.positionBoundWindows();
       } else {
@@ -1481,8 +1484,11 @@ class WindowManager {
       llmWindow.webContents.send('show-loading');
 
       // On Windows, the LLM window was pre-shown at startup (offscreen).
-      // Just reposition it on-screen — no showInactive() needed.
+      // Just reposition it on-screen — if it was hidden, ensure it is shown.
       if (this._llmWindowPreShown) {
+        if (!llmWindow.isVisible()) {
+          this.showOnCurrentDesktop(llmWindow);
+        }
         if (this.bindWindows) {
           this.positionBoundWindows();
         } else {
@@ -1590,6 +1596,17 @@ class WindowManager {
     if (settingsWindow) {
       try { settingsWindow.blur(); } catch (_) { }
       settingsWindow.hide();
+    }
+  }
+
+  toggleSettings() {
+    if (this.isScreenBeingShared) return;
+
+    const settingsWindow = this.windows.get('settings');
+    if (settingsWindow && settingsWindow.isVisible()) {
+      this.hideSettings();
+    } else {
+      this.showSettings();
     }
   }
 

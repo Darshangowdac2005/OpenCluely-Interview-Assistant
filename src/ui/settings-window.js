@@ -355,6 +355,225 @@ document.addEventListener('DOMContentLoaded', () => {
         requestCurrentSettings();
     }, 200);
 
+    // ── Interview Context (Company, JD & Resume) Management ──
+    const targetCompanyInput = document.getElementById('targetCompany');
+    const companyCharCount = document.getElementById('companyCharCount');
+    const jobDescriptionText = document.getElementById('jobDescriptionText');
+    const jdCharCount = document.getElementById('jdCharCount');
+    const resumeDropzone = document.getElementById('resumeDropzone');
+    const resumeFileInput = document.getElementById('resumeFileInput');
+    const resumeText = document.getElementById('resumeText');
+    const resumeCharCount = document.getElementById('resumeCharCount');
+    const resumeStatusInfo = document.getElementById('resumeStatusInfo');
+    const saveResumeBtn = document.getElementById('saveResumeBtn');
+    const clearResumeBtn = document.getElementById('clearResumeBtn');
+    let currentResumeFileName = '';
+
+    const updateCharCounts = () => {
+        if (targetCompanyInput && companyCharCount) {
+            const companyLen = (targetCompanyInput.value || '').length;
+            companyCharCount.textContent = `${companyLen} / 200`;
+        }
+
+        if (jobDescriptionText && jdCharCount) {
+            const jdLen = (jobDescriptionText.value || '').length;
+            const jdTokensEst = Math.round(jdLen / 4);
+            jdCharCount.textContent = `${jdLen.toLocaleString()} chars (~${jdTokensEst.toLocaleString()} tokens)`;
+        }
+
+        if (resumeText && resumeCharCount) {
+            const resumeLen = (resumeText.value || '').length;
+            const resumeTokensEst = Math.round(resumeLen / 4);
+            resumeCharCount.textContent = `${resumeLen.toLocaleString()} chars (~${resumeTokensEst.toLocaleString()} tokens)`;
+        }
+    };
+
+    const updateStatusDisplay = (data) => {
+        if (!resumeStatusInfo) return;
+        const hasText = !!(data && data.text && data.text.trim());
+        const hasCompany = !!(data && data.company && data.company.trim());
+        const hasJd = !!(data && data.jobDescription && data.jobDescription.trim());
+
+        if (hasText || hasCompany || hasJd) {
+            resumeStatusInfo.classList.add('active');
+            const parts = [];
+            if (hasCompany) parts.push(`<strong>${data.company.trim()}</strong>`);
+            if (hasJd) parts.push(`JD Active`);
+            if (hasText) parts.push(`Resume: <strong>${data.fileName || 'Loaded'}</strong>`);
+            
+            resumeStatusInfo.innerHTML = `<i class="fas fa-check-circle"></i> Active Context: ${parts.join(' • ')}`;
+            if (clearResumeBtn) clearResumeBtn.style.display = 'inline-flex';
+        } else {
+            resumeStatusInfo.classList.remove('active');
+            resumeStatusInfo.innerHTML = `<i class="fas fa-circle-info"></i> No interview context loaded`;
+            if (clearResumeBtn) clearResumeBtn.style.display = 'none';
+        }
+    };
+
+    const loadResumeIntoUI = async () => {
+        if (!window.electronAPI || !window.electronAPI.getResume) return;
+        try {
+            const data = await window.electronAPI.getResume();
+            if (data) {
+                if (targetCompanyInput) targetCompanyInput.value = data.company || '';
+                if (jobDescriptionText) jobDescriptionText.value = data.jobDescription || '';
+                if (resumeText) resumeText.value = data.text || '';
+                currentResumeFileName = data.fileName || '';
+                updateCharCounts();
+                updateStatusDisplay(data);
+            }
+        } catch (err) {
+            console.error('Failed to load interview context:', err);
+        }
+    };
+
+    const handleFileSelected = (file) => {
+        if (!file) return;
+        const allowedExts = ['.pdf', '.txt', '.md'];
+        const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            alert('Please select a .pdf, .txt, or .md resume file.');
+            return;
+        }
+
+        if (resumeStatusInfo) {
+            resumeStatusInfo.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Parsing ${file.name}...`;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const arrayBuffer = e.target.result;
+            const uint8Array = new Uint8Array(arrayBuffer);
+            try {
+                const res = await window.electronAPI.parseResumeFile({
+                    data: uint8Array,
+                    fileName: file.name
+                });
+                if (res && res.success && res.text) {
+                    resumeText.value = res.text;
+                    currentResumeFileName = file.name;
+                    updateCharCounts();
+                    // Auto-save preserving any existing company and JD entries
+                    const savePayload = {
+                        text: res.text,
+                        fileName: file.name,
+                        company: targetCompanyInput ? targetCompanyInput.value : '',
+                        jobDescription: jobDescriptionText ? jobDescriptionText.value : ''
+                    };
+                    await window.electronAPI.saveResume(savePayload);
+                    updateStatusDisplay(savePayload);
+                } else {
+                    alert('Could not parse resume: ' + ((res && res.error) || 'Unknown error'));
+                    loadResumeIntoUI();
+                }
+            } catch (err) {
+                console.error('Failed to parse file:', err);
+                alert('Error parsing resume file: ' + err.message);
+                loadResumeIntoUI();
+            }
+        };
+        reader.onerror = () => {
+            alert('Failed to read file from disk');
+            loadResumeIntoUI();
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    if (targetCompanyInput) {
+        targetCompanyInput.addEventListener('input', updateCharCounts);
+    }
+
+    if (jobDescriptionText) {
+        jobDescriptionText.addEventListener('input', updateCharCounts);
+    }
+
+    if (resumeText) {
+        resumeText.addEventListener('input', updateCharCounts);
+    }
+
+    if (resumeDropzone && resumeFileInput) {
+        resumeDropzone.addEventListener('click', () => resumeFileInput.click());
+        resumeFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFileSelected(e.target.files[0]);
+                resumeFileInput.value = '';
+            }
+        });
+
+        resumeDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            resumeDropzone.classList.add('dragover');
+        });
+        resumeDropzone.addEventListener('dragleave', () => {
+            resumeDropzone.classList.remove('dragover');
+        });
+        resumeDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            resumeDropzone.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFileSelected(e.dataTransfer.files[0]);
+            }
+        });
+    }
+
+    if (saveResumeBtn) {
+        saveResumeBtn.addEventListener('click', async () => {
+            if (!window.electronAPI || !window.electronAPI.saveResume) return;
+            const textToSave = resumeText ? resumeText.value : '';
+            const companyToSave = targetCompanyInput ? targetCompanyInput.value : '';
+            const jdToSave = jobDescriptionText ? jobDescriptionText.value : '';
+
+            saveResumeBtn.disabled = true;
+            const origHTML = saveResumeBtn.innerHTML;
+            saveResumeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            try {
+                const payload = {
+                    company: companyToSave,
+                    jobDescription: jdToSave,
+                    text: textToSave,
+                    fileName: currentResumeFileName || (textToSave.trim() ? 'Candidate Profile' : '')
+                };
+                const res = await window.electronAPI.saveResume(payload);
+                if (res && res.success) {
+                    saveResumeBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                    updateStatusDisplay(payload);
+                    setTimeout(() => {
+                        saveResumeBtn.innerHTML = origHTML;
+                        saveResumeBtn.disabled = false;
+                    }, 1500);
+                } else {
+                    alert('Failed to save context: ' + ((res && res.error) || 'Unknown error'));
+                    saveResumeBtn.innerHTML = origHTML;
+                    saveResumeBtn.disabled = false;
+                }
+            } catch (err) {
+                alert('Save error: ' + err.message);
+                saveResumeBtn.innerHTML = origHTML;
+                saveResumeBtn.disabled = false;
+            }
+        });
+    }
+
+    if (clearResumeBtn) {
+        clearResumeBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to clear your saved interview context (Company, Job Description & Resume)?')) return;
+            if (window.electronAPI && window.electronAPI.clearProfile) {
+                await window.electronAPI.clearProfile();
+            } else if (window.electronAPI && window.electronAPI.clearResume) {
+                await window.electronAPI.clearResume();
+            }
+            if (targetCompanyInput) targetCompanyInput.value = '';
+            if (jobDescriptionText) jobDescriptionText.value = '';
+            if (resumeText) resumeText.value = '';
+            currentResumeFileName = '';
+            updateCharCounts();
+            updateStatusDisplay({ text: '', company: '', jobDescription: '' });
+        });
+    }
+
+    // Load saved context on opening settings
+    loadResumeIntoUI();
+
     // ESC key to close
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {

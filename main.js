@@ -426,7 +426,7 @@ class ApplicationController {
       "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
       "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
-      "CommandOrControl+,": () => windowManager.showSettings(),
+      "CommandOrControl+,": () => windowManager.toggleSettings(),
       "Alt+A": () => windowManager.toggleInteraction(),
       "Alt+R": () => this.toggleSpeechRecognition(),
       "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
@@ -579,6 +579,26 @@ class ApplicationController {
     ipcMain.handle("reset-capture-locks", () => this.forceResetCaptureLocks());
     ipcMain.handle("list-displays", () => captureService.listDisplays());
     ipcMain.handle("capture-area", (event, options) => captureService.captureAndProcess(options));
+
+    // Resume & candidate profile / interview context management
+    const resumeService = require("./src/services/resume.service");
+    ipcMain.handle("get-resume", () => resumeService.getResume());
+    ipcMain.handle("save-resume", (event, payload = {}) => {
+      if (typeof payload === 'string') {
+        return resumeService.saveResume(payload);
+      }
+      return resumeService.saveProfile(payload);
+    });
+    ipcMain.handle("clear-resume", () => resumeService.clearResume());
+    ipcMain.handle("clear-profile", () => resumeService.clearAll());
+    ipcMain.handle("parse-resume-file", async (event, { data, fileName } = {}) => {
+      try {
+        const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        return await resumeService.parseFileBuffer(buffer, fileName);
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    });
 
     // Provide reliable clipboard write via main process
     ipcMain.handle("copy-to-clipboard", (event, text) => {
@@ -1020,31 +1040,28 @@ class ApplicationController {
         if (!win.isDestroyed() && win.webContents) {
           logger.info(`[IPC] Checking window ${type} - webContents ID: ${win.webContents.id}`);
           if (win.webContents.id === webContents.id || (!webContents && type === 'llmResponse')) {
-            try {
-              if (typeof win.blur === 'function') win.blur();
-            } catch (_) { }
-            win.hide();
-            logger.info('[IPC] close-window: hid window completely', { type });
-            hideCount++;
-
-            // If the user explicitly closed the LLM window, don't let incoming API calls resuscitate it
+            // If the user explicitly closed the LLM window, use hideLLMResponse()
+            // which correctly parks the window offscreen in pre-shown mode
+            // instead of calling hide() which would require showInactive() later.
             if (type === 'llmResponse') {
               windowManager.llmUserHidden = true;
+              windowManager.hideLLMResponse();
+            } else {
+              try {
+                if (typeof win.blur === 'function') win.blur();
+              } catch (_) { }
+              win.hide();
             }
+            logger.info('[IPC] close-window: hid window completely', { type });
+            hideCount++;
           }
         }
       }
 
       if (hideCount === 0) {
         logger.warn('[IPC] close-window: no match found, attempting to hide llmResponse unconditionally');
-        const llmWin = windowManager.windows.get('llmResponse');
-        if (llmWin && !llmWin.isDestroyed()) {
-          try {
-            if (typeof llmWin.blur === 'function') llmWin.blur();
-          } catch (_) { }
-          llmWin.hide();
-          windowManager.llmUserHidden = true;
-        }
+        windowManager.llmUserHidden = true;
+        windowManager.hideLLMResponse();
       }
 
       return { success: true };
@@ -1056,10 +1073,10 @@ class ApplicationController {
         return { success: false, error: 'LLM response window is unavailable' };
       }
 
-      // Use a direct window reference so closing the loading view does not
-      // depend on a renderer webContents identity lookup.
+      // Use hideLLMResponse() which correctly parks the window offscreen
+      // in pre-shown mode instead of calling hide() which breaks re-show.
       windowManager.llmUserHidden = true;
-      llmWindow.hide();
+      windowManager.hideLLMResponse();
       return { success: true };
     });
 
@@ -1067,7 +1084,7 @@ class ApplicationController {
       const llmWindow = windowManager.windows.get('llmResponse');
       if (!llmWindow || llmWindow.isDestroyed()) return;
       windowManager.llmUserHidden = true;
-      llmWindow.hide();
+      windowManager.hideLLMResponse();
     });
 
     // Move the LLM response window
@@ -1428,6 +1445,8 @@ class ApplicationController {
     } catch (_) {}
     this._isOcrProcessing = false;
     this._ocrStartTime = 0;
+    // Reset the user-hidden flag so the next capture/response shows the overlay
+    windowManager.llmUserHidden = false;
     windowManager.hideLLMResponse();
     windowManager.broadcastToAllWindows('capture-lock-reset', { timestamp: Date.now() });
     return { success: true };
