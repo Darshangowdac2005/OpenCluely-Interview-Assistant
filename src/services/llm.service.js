@@ -809,41 +809,63 @@ Always respond to the point, do not repeat the question or unnecessary informati
       prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
     }
 
+    // Inject candidate resume / profile / company / JD context so speech
+    // responses are aligned with the candidate's background — identical to
+    // the injection that prompt-loader.js performs for screenshot capture.
+    try {
+      const resumeService = require('./resume.service');
+      const resumeContext = resumeService.getPromptContext();
+      if (resumeContext) {
+        prompt += resumeContext;
+      }
+      // For DSA skill, also inject target company context
+      if (activeSkill === 'dsa') {
+        const profile = resumeService.getResume();
+        if (profile && profile.company && profile.company.trim()) {
+          prompt += `\n\n## TARGET COMPANY CONTEXT: ${profile.company.trim().toUpperCase()}
+- Write clean, production-grade, and optimal code with thorough edge-case analysis matching the rigorous technical hiring bar at ${profile.company.trim()}.`;
+        }
+      }
+    } catch (_) {
+      // Resume service may not be initialized yet; continue without context
+    }
+
     prompt += `
 
 ## Response Rules:
 
-### If the transcription is casual conversation, greetings, or NOT related to ${activeSkill}:
-- Respond with: "Yeah, I'm listening. Ask your question relevant to ${activeSkill}."
-- Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
+### If the transcription is casual small-talk, mic check, or unrelated idle chat:
+- Respond briefly with: "Yeah, I'm listening. Ask your question relevant to ${activeSkill}."
+- Or: "I'm here, what's your question?"
 
-### If the transcription IS relevant to ${activeSkill} or is a follow-up question:
-- Provide a comprehensive, detailed response
-- Use bullet points, examples, and explanations
-- Focus on actionable insights and complete answers
-- Do not truncate or shorten your response
+### If the transcription is an interview question, follow-up, or relates to candidate background/resume/company:
+- Provide a comprehensive, polished, and direct interview response.
+- If the question asks about the candidate's background, projects, work experience, skills, accomplishments, resume details, or target company/role: strictly ground your answer in the Candidate Profile & Target Role Context provided above, speaking confidently in first-person ("In my experience...", "When I built...", "At my previous role...").
+- For technical or ${activeSkill} questions: focus on actionable insights, optimal solutions, and complete answers.
+- Use bullet points and clear structured explanations.
+- Do not truncate or shorten your response.
 
 ### Examples of casual/irrelevant messages:
 - "Hello", "Hi there", "How are you?"
-- "What's the weather like?"
+- "What's the weather like?", "Can you hear me?", "Mic check"
 - "I'm just testing this"
-- Random conversations not related to ${activeSkill}
+- Random banter completely unrelated to the interview
 
 ### Examples of relevant messages:
-- Actual questions about ${activeSkill} concepts
-- Follow-up questions to previous responses
-- Requests for clarification on ${activeSkill} topics
-- Problem-solving requests related to ${activeSkill}
+- Technical and problem-solving questions related to ${activeSkill}
+- Behavioral, HR, and background questions ("Tell me about yourself", "Walk me through your resume", "Tell me about project X")
+- Follow-up questions to previous interview discussion
+- Target company or role alignment questions
 
 ## Response Format:
-- Keep responses detailed
+- Keep responses detailed and interview-ready
 - Use bullet points for structured answers
-- Be encouraging and helpful
-- Stay focused on ${activeSkill}
+- Be encouraging, confident, and professional
+- Ground all candidate-specific answers directly in the provided resume data
 
 If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
 
-Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
+Remember: Be intelligent about filtering - provide thorough, resume-aligned answers for all real interview questions.`;
 
     return prompt;
   }

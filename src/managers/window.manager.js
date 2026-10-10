@@ -2051,10 +2051,13 @@ class WindowManager {
 
   handleRecordingStarted() {
     this.isRecording = true;
-    this.showChatWindow();
+    const target = String(process.env.WHISPER_RESPONSE_TARGET || 'both').trim().toLowerCase();
+    if (target !== 'overlay') {
+      this.showChatWindow();
+    }
     // Notify all windows about recording state
     this.broadcastToAllWindows('recording-started');
-    logger.debug('Recording started, chat window shown');
+    logger.debug('Recording started', { chatShown: target !== 'overlay' });
   }
 
   handleRecordingStopped() {

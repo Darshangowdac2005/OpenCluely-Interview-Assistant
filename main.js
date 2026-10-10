@@ -1198,7 +1198,9 @@ class ApplicationController {
     } else {
       try {
         speechService.startRecording();
-        windowManager.showChatWindow();
+        if (this.getVoiceResponseTarget() !== 'overlay') {
+          windowManager.showChatWindow();
+        }
         logger.info("Speech recognition started via global shortcut");
       } catch (error) {
         logger.error("Error starting speech recognition:", error);
@@ -1964,10 +1966,10 @@ class ApplicationController {
         envUpdates.SPEECH_PROVIDER = settings.speechProvider;
       }
       if (settings.azureKey !== undefined) {
-        envUpdates.AZURE_SPEECH_KEY = settings.azureKey;
+        envUpdates.AZURE_SPEECH_KEY = String(settings.azureKey || '').trim();
       }
       if (settings.azureRegion !== undefined) {
-        envUpdates.AZURE_SPEECH_REGION = settings.azureRegion;
+        envUpdates.AZURE_SPEECH_REGION = String(settings.azureRegion || '').trim().toLowerCase().replace(/\s+/g, '');
       }
       if (settings.whisperCommand !== undefined) {
         envUpdates.WHISPER_COMMAND = settings.whisperCommand;
@@ -2002,6 +2004,8 @@ class ApplicationController {
       // equal and skip the speech re-init below (the exact stale-mic-after-install
       // bug the re-init guards against).
       const prevWhisperCommand = process.env.WHISPER_COMMAND || '';
+      const prevAzureKey = process.env.AZURE_SPEECH_KEY || '';
+      const prevAzureRegion = process.env.AZURE_SPEECH_REGION || '';
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
@@ -2022,15 +2026,13 @@ class ApplicationController {
       }
 
       // Reinitialize speech service when provider OR whisper command
-      // changes. Without the second check, the install flow (which
-      // writes a new whisperCommand after install but keeps the same
-      // provider) would leave the speech service pointing at a stale
-      // (or non-existent) binary, and the main overlay's mic button
-      // would stay hidden / non-functional.
+      // OR Azure settings change.
       const providerChanged = settings.speechProvider && speechService.provider !== settings.speechProvider;
       const whisperCommandChanged = settings.whisperCommand !== undefined &&
         prevWhisperCommand !== String(settings.whisperCommand || '');
-      if (providerChanged || whisperCommandChanged) {
+      const azureChanged = (settings.azureKey !== undefined && prevAzureKey !== envUpdates.AZURE_SPEECH_KEY) ||
+        (settings.azureRegion !== undefined && prevAzureRegion !== envUpdates.AZURE_SPEECH_REGION);
+      if (providerChanged || whisperCommandChanged || azureChanged) {
         try {
           speechService.initializeClient();
           this.speechAvailable = speechService.isAvailable

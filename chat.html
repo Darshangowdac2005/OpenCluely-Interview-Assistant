@@ -713,7 +713,7 @@
     <script src="lib/markdown.js"></script>
     <script src="lib/mathrender.js"></script>
     <!-- PrismJS core and autoloader for language components -->
-    <script src="./node_modules/prismjs/prism.min.js"></script>
+    <script src="./node_modules/prismjs/prism.js"></script>
     <script src="./node_modules/prismjs/plugins/autoloader/prism-autoloader.min.js"></script>
     
     <script>
@@ -833,6 +833,15 @@
           if (data && data.response) {
             renderAssistantResponse(data.response);
           }
+        });
+      }
+
+      // Handle LLM errors so thinking indicator is cleared and error shown
+      if (whysperAPI && whysperAPI.onLlmError) {
+        whysperAPI.onLlmError((event, data) => {
+          try { hideThinkingIndicator(); } catch (_) {}
+          const errMsg = (data && data.error) ? data.error : 'Failed to generate response';
+          addMessage(`LLM Error: ${errMsg}`, 'error');
         });
       }
 

@@ -468,8 +468,9 @@ class SpeechService extends EventEmitter {
         throw new Error('Local microphone recorder dependency is not installed');
       }
 
-      const subscriptionKey = this._getSetting('azureKey') || process.env.AZURE_SPEECH_KEY;
-      const region = this._getSetting('azureRegion') || process.env.AZURE_SPEECH_REGION;
+      const subscriptionKey = String(this._getSetting('azureKey') || process.env.AZURE_SPEECH_KEY || '').trim();
+      const rawRegion = String(this._getSetting('azureRegion') || process.env.AZURE_SPEECH_REGION || '').trim();
+      const region = rawRegion.toLowerCase().replace(/\s+/g, '');
 
       if (!subscriptionKey || !region) {
         const reason = 'Azure Speech credentials not found. Speech recognition disabled.';
@@ -584,15 +585,22 @@ class SpeechService extends EventEmitter {
       throw new Error('Azure Speech client not initialized');
     }
 
+    this._cleanup();
     this.isRecording = true;
     this.emit('recording-started');
     this.emit('status', 'Azure recording started');
-    this._cleanup();
 
     try {
       this.pushStream = sdk.AudioInputStream.createPushStream();
       this.audioConfig = sdk.AudioConfig.fromStreamInput(this.pushStream);
-      this._startMicrophoneCapture();
+
+      // On Windows and macOS, capture microphone in renderer via Web Audio API.
+      // Linux uses the native recorder (sox/arecord).
+      this.useRendererCapture = process.platform === 'win32' || process.platform === 'darwin';
+      if (!this.useRendererCapture) {
+        this._startMicrophoneCapture();
+      }
+
       this.recognizer = new sdk.SpeechRecognizer(this.speechConfig, this.audioConfig);
     } catch (error) {
       logger.error('Failed to start Azure recording session', { error: error.message });
@@ -788,14 +796,26 @@ class SpeechService extends EventEmitter {
    * the current Whisper segment buffer.
    */
   handleAudioChunkFromRenderer(chunk) {
-    if (!this.isRecording || this.provider !== 'whisper' || !this.useRendererCapture) {
+    if (!this.isRecording || !this.useRendererCapture) {
       return;
     }
     if (!chunk || !chunk.length) {
       return;
     }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    this._ingestWhisperAudio(buffer);
+    if (this.provider === 'azure') {
+      if (this.pushStream) {
+        try {
+          this.pushStream.write(buffer);
+        } catch (error) {
+          logger.error('Error writing audio chunk to Azure push stream', { error: error.message });
+        }
+      }
+      return;
+    }
+    if (this.provider === 'whisper') {
+      this._ingestWhisperAudio(buffer);
+    }
   }
 
   /**
@@ -1043,7 +1063,7 @@ class SpeechService extends EventEmitter {
           this.audioConfig.close();
         }
       } catch (error) {
-        logger.error('Error closing audio config', { error: error.message });
+        // Safe to ignore when audio stream is already stopped or closing
       }
       this.audioConfig = null;
     }
@@ -1532,6 +1552,14 @@ class SpeechService extends EventEmitter {
       }
     }
 
+    // If any base argument is a .py script, verify it exists before spawning
+    for (const arg of candidate.baseArgs) {
+      if (typeof arg === 'string' && arg.endsWith('.py') && !fs.existsSync(arg)) {
+        logger.debug('Whisper probe skipped: script file does not exist', { arg });
+        return null;
+      }
+    }
+
     // Cheap torch-free check first so the mic appears on the first run.
     const fast = this._probeWhisperModuleFast(candidate);
     if (fast) {
@@ -1546,8 +1574,6 @@ class SpeechService extends EventEmitter {
         // First `import whisper` (torch/numba) can be slow on a cold cache.
         timeout: 30000,
         windowsHide: true,
-        // No shell — see _probeWhisperModuleFast: shell:true on Windows splits
-        // spaced paths (e.g. "C:\Users\CANDAN SINGH\...") and breaks the probe.
       });
     } catch (spawnErr) {
       logger.debug('Whisper probe spawn error', {
@@ -1559,14 +1585,17 @@ class SpeechService extends EventEmitter {
 
     const output = `${probe.stdout || ''}\n${probe.stderr || ''}`;
     const noModule = output.includes('No module named whisper');
-    const isHelpOutput = output.includes('usage:') || output.includes('whisper') || output.includes('options');
+    const hasErrorIndicators = output.includes('No such file or directory') ||
+                               output.includes("can't open file") ||
+                               output.includes('Traceback (most recent call last)');
+    const isHelpOutput = !hasErrorIndicators && (output.includes('usage:') || output.includes('options:') || output.includes('--help'));
 
-    if (!probe.error && probe.status === 0 && !noModule) {
+    if (!probe.error && probe.status === 0 && !noModule && !hasErrorIndicators && isHelpOutput) {
       return candidate;
     }
 
-    // Some whisper builds exit with non-zero on --help but still print usage
-    if (!probe.error && !noModule && isHelpOutput) {
+    // Some whisper builds exit with non-zero on --help but still print genuine usage
+    if (!probe.error && !noModule && !hasErrorIndicators && isHelpOutput) {
       logger.debug('Whisper probe accepted non-zero help output', {
         command: cmd,
         status: probe.status
@@ -1622,7 +1651,9 @@ class SpeechService extends EventEmitter {
       }
       // Some Windows venvs create whisper-script.py alongside whisper.exe
       const scriptPath = base + '-script.py';
-      candidates.push({ command: 'python', baseArgs: [scriptPath, ...parsed.baseArgs], source: 'configured (script.py)' });
+      if (fs.existsSync(scriptPath)) {
+        candidates.push({ command: 'python', baseArgs: [scriptPath, ...parsed.baseArgs], source: 'configured (script.py)' });
+      }
       // Try using the venv's own python with -m whisper
       const venvPython = path.join(path.dirname(base), 'python.exe');
       if (fs.existsSync(venvPython)) {

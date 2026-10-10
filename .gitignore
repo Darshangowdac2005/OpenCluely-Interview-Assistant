@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 .venv-whisper/
 .whisper-models/
 eng.traineddata
@@ -7,3 +9,10 @@ dist/
 bin/
 .DS_Store
 *.log
+
+# User candidate resume & personal files
+candidate-resume.json
+candidate-profile.json
+*.pdf
+*.docx
+

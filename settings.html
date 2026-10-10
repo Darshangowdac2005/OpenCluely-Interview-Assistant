@@ -515,6 +515,20 @@
                         </select>
                     </div>
 
+                    <!-- Voice Response Target (shared across all providers) -->
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">Voice Response Target</div>
+                            <div class="settings-item-description">Choose where answers generated from speech are
+                                displayed</div>
+                        </div>
+                        <select class="input-field" id="whisperResponseTarget">
+                            <option value="both">Chat and overlay</option>
+                            <option value="chat">Chat only</option>
+                            <option value="overlay">Overlay only</option>
+                        </select>
+                    </div>
+
                     <!-- Azure fields (shown only when Azure is selected) -->
                     <div id="azureFields" class="settings-group">
                         <div class="settings-item">
@@ -584,18 +598,7 @@
                                 <option value="manual">Manual start/stop</option>
                             </select>
                         </div>
-                        <div class="settings-item">
-                            <div>
-                                <div class="settings-item-label">Voice Response Target</div>
-                                <div class="settings-item-description">Choose where answers generated from speech are
-                                    displayed</div>
-                            </div>
-                            <select class="input-field" id="whisperResponseTarget">
-                                <option value="both">Chat and overlay</option>
-                                <option value="chat">Chat only</option>
-                                <option value="overlay">Overlay only</option>
-                            </select>
-                        </div>
+
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label">Whisper Segment Length</div>

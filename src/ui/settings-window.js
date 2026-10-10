@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (input) input.disabled = provider !== 'azure';
         });
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperDeviceSelect,
-            whisperCaptureModeSelect, whisperResponseTargetSelect, whisperSegmentMsInput].forEach(input => {
+            whisperCaptureModeSelect, whisperSegmentMsInput].forEach(input => {
                 if (input) input.disabled = provider !== 'whisper';
             });
     };
