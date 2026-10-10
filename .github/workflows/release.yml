@@ -244,12 +244,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit "${GITHUB_REF_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "OpenCluely ${GITHUB_REF_NAME}" \
-            --notes-file RELEASE_BODY.md \
-            --draft=false \
-            --prerelease=false
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "OpenCluely ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_BODY.md \
+              --draft=false \
+              --prerelease=false
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "OpenCluely ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_BODY.md \
+              --draft=false \
+              --prerelease=false
+          fi
 
           for asset in release/*; do
             echo "Uploading ${asset}"
